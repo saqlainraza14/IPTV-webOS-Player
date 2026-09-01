@@ -4,6 +4,16 @@ An optimized, full-featured IPTV player designed specifically for **LG webOS Sma
 
 This app allows you to stream and organize Live TV channels, Movies, and Series from standard IPTV playlists/subscriptions with a TV-friendly user interface.
 
+> [!IMPORTANT]
+> TV Navigator app is a free, open-source player — it never sells IPTV subscriptions, channels, or playlists. Get the app only from the GitHub Releases. 
+
+
+<img width="1920" height="1565" alt="image" src="https://github.com/user-attachments/assets/08131283-2f5c-4f72-806b-ade419cf8375" />
+
+<img width="1920" height="869" alt="image" src="https://github.com/user-attachments/assets/2ab92b30-c001-4804-b028-00d79b2b5e8b" />
+
+<img width="1920" height="1133" alt="image" src="https://github.com/user-attachments/assets/50fe7c58-724f-40bc-ba93-42bb3bd9b651" />
+
 
 ## 🚀 Features
 
