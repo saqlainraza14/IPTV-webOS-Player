@@ -4,7 +4,6 @@ An optimized, full-featured IPTV player designed specifically for **LG webOS Sma
 
 This app allows you to stream and organize Live TV channels, Movies, and Series from standard IPTV playlists/subscriptions with a TV-friendly user interface.
 
----
 
 ## 🚀 Features
 
@@ -28,7 +27,6 @@ This app allows you to stream and organize Live TV channels, Movies, and Series 
   - Built-in multi-source router allowing you to add, edit, and switch between multiple IPTV connections.
   - IndexedDB storage integration for lightning-fast catalog caching.
 
----
 
 ## 🛠️ Project Structure
 
@@ -51,7 +49,6 @@ iptvnator-webos-clean/
 └── build/                # Output folder for compiled IPK binaries
 ```
 
----
 
 ## 📦 How to Build the App
 
@@ -88,7 +85,6 @@ chmod +x build.sh
 ./build.sh
 ```
 
----
 
 ## 📺 Installation on LG webOS TVs
 
@@ -115,7 +111,6 @@ If you have the webOS CLI tools installed:
 
 You can sideload the generated `.ipk` package using community webOS managers like the **Homebrew Channel** (if rooted) or DevMode manager applications.
 
----
 
 ## 🔧 Technical Details & Old webOS 3.x Support
 
@@ -126,7 +121,6 @@ You can sideload the generated `.ipk` package using community webOS managers lik
 - **Offline / Local Hosting**:
   The player runs entirely client-side. The database operations use browser `localStorage` and `IndexedDB` caching mechanisms, making stream fetching incredibly efficient without stressing your IPTV server.
 
----
 
 ## 📄 License
 
