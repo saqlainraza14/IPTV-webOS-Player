@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TV Navigator – Add Source</title>
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      // Runs before every other script: any load/parse/runtime error becomes
+      // visible on the TV instead of failing silently.
+      window.onerror = function (msg, src, line) {
+        try {
+          var b = document.getElementById("lp-diag");
+          if (b) {
+            b.style.color = "#ff9aa2";
+            b.textContent =
+              "JS ERROR: " +
+              msg +
+              " @ " +
+              String(src).split("/").pop() +
+              ":" +
+              line;
+          }
+        } catch (e) {}
+        return false;
+      };
+    </script>
+    <script src="polyfills.js"></script>
+    <style>
+      /* ── login page layout ─────────────────────────────────── */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #080b10;
+        overflow: hidden;
+      }
+      #login-page {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        -webkit-box-pack: center;
+        -webkit-justify-content: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+      }
+      #login-card {
+        width: 1340px;
+        max-width: 92vw;
+        background: rgba(19, 24, 31, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        padding: 36px 40px 40px;
+      }
+      .lp-head {
+        margin-bottom: 28px;
+      }
+      .lp-head h1 {
+        margin: 14px 0 8px;
+        font-size: 58px;
+        color: #edf1f7;
+      }
+      .lp-head p {
+        margin: 0;
+        color: #a4afbc;
+        font-size: 28px;
+        line-height: 1.5;
+      }
+      .lp-tabs {
+        margin-bottom: 22px;
+      }
+      .lp-fields {
+        margin-bottom: 24px;
+      }
+      .lp-error {
+        display: none;
+        margin-bottom: 16px;
+        border-radius: 12px;
+        padding: 14px 18px;
+        background: rgba(166, 44, 56, 0.16);
+        color: #f5aab1;
+        font-size: 26px;
+      }
+      .lp-error.show {
+        display: block;
+      }
+      .lp-actions {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-pack: end;
+        -webkit-justify-content: flex-end;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      /* field layout identical to the main app modal */
+      .lp-field-row {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        margin-bottom: 14px;
+      }
+      .lp-field {
+        width: 50%;
+        padding-right: 10px;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+      }
+      .lp-field:last-child {
+        padding-right: 0;
+      }
+      .lp-field-wide {
+        width: 100%;
+        padding-right: 0;
+      }
+      .lp-field label {
+        display: block;
+        margin-bottom: 8px;
+        color: #a4afbc;
+        font-size: 24px;
+      }
+      .lp-field input {
+        width: 100%;
+        height: 74px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(28, 33, 41, 0.96);
+        color: #edf1f7;
+        padding: 0 18px;
+        font-size: 27px;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+        pointer-events: auto;
+      }
+      .lp-field input:focus {
+        outline: 3px solid #4a7afc;
+        outline-offset: 2px;
+      }
+      /* hidden tab blocks */
+      .lp-form-block {
+        display: none;
+      }
+      .lp-form-block.active {
+        display: block;
+      }
+      /* focus ring on buttons (webOS 3.x needs explicit outline) */
+      .tab-btn:focus,
+      .btn:focus {
+        outline: 3px solid #4a7afc !important;
+        outline-offset: 2px !important;
+      }
+      /* JS-managed selection ring. The page tracks selection itself because
+         DOM focus on an input opens the webOS keyboard and traps arrow keys. */
+      .lp-focus {
+        outline: 4px solid #4a7afc !important;
+        outline-offset: 3px !important;
+        box-shadow: 0 0 0 6px rgba(74, 122, 252, 0.28) !important;
+      }
+      button.lp-focus {
+        background: #4a7afc !important;
+        color: #ffffff !important;
+        border-color: #4a7afc !important;
+      }
+      input.lp-focus {
+        border-color: #4a7afc !important;
+        background: rgba(40, 52, 78, 0.98) !important;
+      }
+      /* nav hint bar at bottom */
+      #lp-hint {
+        margin-top: 18px;
+        font-size: 22px;
+        color: #6b7a8d;
+        text-align: right;
+      }
+      /* diagnostics readout — shows key codes / JS errors on the TV itself */
+      #lp-diag {
+        margin-top: 10px;
+        font-size: 20px;
+        color: #5d6b7d;
+        text-align: right;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="login-page">
+      <div id="login-card">
+        <div class="lp-head">
+          <div class="brand-mark">
+            <img class="brand-logo" src="new-logo.png" alt="IPTV logo" />
+          </div>
+          <h1>TV Navigator</h1>
+          <p>
+            Add an IPTV source. This clean-room TV app is inspired by desktop
+            IPTV players, but rebuilt for LG webOS 3.x.
+          </p>
+        </div>
+
+        <div class="lp-tabs">
+          <button
+            id="lp-tab-xtream"
+            class="tab-btn active focusable"
+            type="button"
+            tabindex="0"
+            data-lptab="xtream"
+          >
+            Xtream
+          </button>
+          <button
+            id="lp-tab-m3u"
+            class="tab-btn focusable"
+            type="button"
+            tabindex="0"
+            data-lptab="m3u"
+          >
+            M3U URL
+          </button>
+        </div>
+
+        <div id="lp-error" class="lp-error"></div>
+
+        <!-- Xtream fields -->
+        <div id="lp-form-xtream" class="lp-form-block active lp-fields">
+          <div class="lp-field-row">
+            <div class="lp-field">
+              <label for="lp-name">Source Name</label>
+              <input
+                id="lp-name"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="My Xtream"
+              />
+            </div>
+            <div class="lp-field">
+              <label for="lp-server">Server URL</label>
+              <input
+                id="lp-server"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="http://provider.com:8080"
+              />
+            </div>
+          </div>
+          <div class="lp-field-row">
+            <div class="lp-field">
+              <label for="lp-user">Username</label>
+              <input id="lp-user" class="focusable" type="text" tabindex="0" />
+            </div>
+            <div class="lp-field">
+              <label for="lp-pass">Password</label>
+              <input
+                id="lp-pass"
+                class="focusable"
+                type="password"
+                tabindex="0"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- M3U fields -->
+        <div id="lp-form-m3u" class="lp-form-block lp-fields">
+          <div class="lp-field-row">
+            <div class="lp-field">
+              <label for="lp-m3u-name">Source Name</label>
+              <input
+                id="lp-m3u-name"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="Remote Playlist"
+              />
+            </div>
+            <div class="lp-field lp-field-wide" style="width: 50%">
+              <label for="lp-m3u-url">M3U URL</label>
+              <input
+                id="lp-m3u-url"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="https://example.com/playlist.m3u8"
+              />
+            </div>
+          </div>
+          <div class="lp-field-row">
+            <div class="lp-field lp-field-wide">
+              <label for="lp-m3u-ua">Custom User-Agent (optional)</label>
+              <input
+                id="lp-m3u-ua"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="Mozilla/5.0"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div id="lp-error2" class="lp-error"></div>
+
+        <div class="lp-actions">
+          <!-- Shown by login.js only when at least one source already exists. -->
+          <button
+            id="lp-cancel"
+            class="btn focusable"
+            type="button"
+            style="display: none; margin-right: 14px"
+          >
+            Cancel
+          </button>
+          <button
+            id="lp-save"
+            class="btn primary focusable"
+            type="button"
+            tabindex="0"
+          >
+            Save Source
+          </button>
+        </div>
+
+        <div id="lp-hint">
+          ▲▼◀▶ move &nbsp;·&nbsp; OK on a field to type &nbsp;·&nbsp; BACK when
+          done typing
+        </div>
+        <div id="lp-diag">starting…</div>
+      </div>
+      <!-- /login-card -->
+    </div>
+    <!-- /login-page -->
+
+    <script src="login.js"></script>
+  </body>
+</html>

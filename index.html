@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TV Navigator</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- On-screen error capture — runs before everything else so any crash is visible on the TV -->
+    <script>
+      (function () {
+        // Collect errors even if the overlay DOM isn't ready yet.
+        window.__appErrors = [];
+
+        function showError(msg) {
+          window.__appErrors.push(msg);
+          try {
+            var box = document.getElementById("app-err-overlay");
+            if (box) {
+              box.style.display = "block";
+              var ul = document.getElementById("app-err-list");
+              if (ul) {
+                var li = document.createElement("li");
+                li.textContent = msg;
+                ul.appendChild(li);
+              }
+            }
+          } catch (e2) {}
+        }
+
+        window.onerror = function (msg, src, line, col) {
+          showError("JS ERROR @ " + (src || "?").split("/").pop() + ":" + line + "  " + msg);
+          if (window._sd)
+            window._sd("ERROR: " + msg + " @ " + (src || "?").split("/").pop() + ":" + line);
+          return false;
+        };
+
+        // Flush any errors that occurred before the overlay DOM existed.
+        window.__flushAppErrors = function () {
+          var pending = window.__appErrors;
+          window.__appErrors = [];
+          for (var i = 0; i < pending.length; i++) {
+            showError(pending[i]);
+          }
+        };
+      })();
+    </script>
+    <script src="polyfills.js"></script>
+    <script>
+      if (window._sd) window._sd("polyfills OK");
+    </script>
+    <script src="hls.min.js"></script>
+    <script>
+      if (window._sd) window._sd("hls.min.js OK");
+    </script>
+    <script src="mpegts.min.js"></script>
+    <script>
+      if (window._sd) window._sd("mpegts OK — app.js loading...");
+    </script>
+    <!-- Redirect to dedicated login page when no source is saved yet -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("tvn_sources");
+          var arr = raw ? JSON.parse(raw) : [];
+          if (!arr || !arr.length) {
+            window.location.replace("login.html");
+          }
+        } catch (e) {
+          window.location.replace("login.html");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- STATIC diagnostic panel — visible immediately, before any JS runs.
+         app.js hides it once init completes successfully. -->
+    <div
+      id="static-diag"
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 99999;
+        background: #0a0e14;
+        padding: 60px 80px;
+        overflow-y: auto;
+      "
+    >
+      <div style="color: #4af; font: bold 42px sans-serif; margin-bottom: 24px">TV Navigator</div>
+      <div
+        id="static-diag-status"
+        style="color: #7fffd4; font: 30px monospace; margin-bottom: 20px"
+      >
+        Loading scripts...
+      </div>
+      <div style="color: #888; font: 24px sans-serif; margin-bottom: 30px">
+        If this stays visible, JavaScript is not running. Check install.
+      </div>
+      <ul
+        id="static-diag-log"
+        style="
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          font: 26px monospace;
+          color: #ffe4b5;
+          line-height: 1.8;
+        "
+      ></ul>
+    </div>
+    <script>
+      (function () {
+        function sd(msg) {
+          var el = document.getElementById("static-diag-status");
+          if (el) el.textContent = msg;
+          var ul = document.getElementById("static-diag-log");
+          if (ul) {
+            var li = document.createElement("li");
+            li.textContent = msg;
+            ul.appendChild(li);
+          }
+        }
+        window._sd = sd;
+        sd("polyfills loading...");
+      })();
+    </script>
+
+    <!-- On-screen error overlay — flush any errors that fired before this DOM existed -->
+    <div
+      id="app-err-overlay"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.92);
+        overflow-y: auto;
+        padding: 40px;
+      "
+    >
+      <div style="color: #ff9aa2; font-size: 34px; font-weight: 700; margin-bottom: 20px">
+        TV Navigator — Startup Error
+      </div>
+      <div style="color: #aaa; font-size: 22px; margin-bottom: 24px">
+        Read this off the screen and send it. Press BACK to try dismissing.
+      </div>
+      <ul
+        id="app-err-list"
+        style="
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          color: #ffcc88;
+          font-size: 28px;
+          font-family: monospace;
+          line-height: 1.7;
+        "
+      ></ul>
+    </div>
+    <script>
+      if (window.__flushAppErrors) window.__flushAppErrors();
+    </script>
+    <!--
+    SOURCE MODAL COMMENTED OUT — login now handled by login.html (separate page).
+    Keeping this markup here for reference / future edit-source re-use.
+
+    <div id="source-modal" class="modal open">
+      <div class="modal-card source-card">
+        <div class="source-card-head">
+          <div>
+            <div class="brand-mark">
+              <img class="brand-logo" src="new-logo.png" alt="IPTV logo" />
+            </div>
+            <h1>TV Navigator</h1>
+            <p>
+              Add an IPTV source. This clean-room TV app is inspired by desktop
+              IPTV players, but rebuilt for LG webOS 3.x.
+            </p>
+          </div>
+        </div>
+        <div class="modal-tabs">
+          <button
+            class="tab-btn active focusable"
+            type="button"
+            data-source-tab="xtream"
+            tabindex="0"
+          >
+            Xtream
+          </button>
+          <button
+            class="tab-btn focusable"
+            type="button"
+            data-source-tab="m3u"
+            tabindex="0"
+          >
+            M3U URL
+          </button>
+        </div>
+        <div id="source-error" class="source-error"></div>
+        <div id="source-form-xtream" class="source-form-block active">
+          <div class="field-row">
+            <div class="field">
+              <label for="src-name">Source Name</label>
+              <input
+                id="src-name"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="My Xtream"
+              />
+            </div>
+            <div class="field">
+              <label for="src-server">Server URL</label>
+              <input
+                id="src-server"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="http://provider.com:8080"
+              />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="src-user">Username</label>
+              <input id="src-user" class="focusable" type="text" tabindex="0" />
+            </div>
+            <div class="field">
+              <label for="src-pass">Password</label>
+              <input
+                id="src-pass"
+                class="focusable"
+                type="password"
+                tabindex="0"
+              />
+            </div>
+          </div>
+        </div>
+        <div id="source-form-m3u" class="source-form-block">
+          <div class="field-row">
+            <div class="field">
+              <label for="m3u-name">Source Name</label>
+              <input
+                id="m3u-name"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="Remote Playlist"
+              />
+            </div>
+            <div class="field field-wide">
+              <label for="m3u-url">M3U URL</label>
+              <input
+                id="m3u-url"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="https://example.com/playlist.m3u8"
+              />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field field-wide">
+              <label for="m3u-user-agent">Custom User-Agent (optional)</label>
+              <input
+                id="m3u-user-agent"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="Mozilla/5.0"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button
+            id="source-cancel"
+            class="btn focusable"
+            type="button"
+            tabindex="0"
+          >
+            Close
+          </button>
+          <button
+            id="source-save"
+            class="btn primary focusable"
+            type="button"
+            tabindex="0"
+          >
+            Save Source
+          </button>
+        </div>
+      </div>
+    </div>
+    END SOURCE MODAL COMMENT -->
+
+    <!-- Stub elements that app.js still references by ID so it doesn't throw -->
+    <div id="source-modal" class="modal" style="display: none" aria-hidden="true">
+      <div class="modal-card source-card">
+        <div class="modal-tabs" style="display: none">
+          <button class="tab-btn active" type="button" data-source-tab="xtream" tabindex="-1">
+            Xtream
+          </button>
+          <button class="tab-btn" type="button" data-source-tab="m3u" tabindex="-1">M3U URL</button>
+        </div>
+        <div id="source-error" class="source-error"></div>
+        <div id="source-form-xtream" class="source-form-block active">
+          <div class="field-row">
+            <div class="field">
+              <input id="src-name" type="text" tabindex="-1" />
+            </div>
+            <div class="field">
+              <input id="src-server" type="text" tabindex="-1" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <input id="src-user" type="text" tabindex="-1" />
+            </div>
+            <div class="field">
+              <input id="src-pass" type="password" tabindex="-1" />
+            </div>
+          </div>
+        </div>
+        <div id="source-form-m3u" class="source-form-block">
+          <div class="field-row">
+            <div class="field">
+              <input id="m3u-name" type="text" tabindex="-1" />
+            </div>
+            <div class="field">
+              <input id="m3u-url" type="text" tabindex="-1" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <input id="m3u-user-agent" type="text" tabindex="-1" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="source-cancel" class="btn" type="button" tabindex="-1">Close</button>
+          <button id="source-save" class="btn primary" type="button" tabindex="-1">
+            Save Source
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal">
+      <div class="modal-card confirm-card">
+        <h2 id="confirm-title">Confirm action</h2>
+        <p id="confirm-message" class="muted"></p>
+        <div class="modal-actions confirm-actions">
+          <button id="confirm-cancel" class="btn focusable" type="button" tabindex="0">
+            Cancel
+          </button>
+          <button id="confirm-ok" class="btn danger focusable" type="button" tabindex="0">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app-shell">
+      <aside id="rail">
+        <div class="rail-brand">
+          <img class="brand-logo" src="new-logo.png" alt="IPTV logo" />
+        </div>
+        <button class="rail-btn focusable active" data-view="home" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <path d="M4 11l8-7 8 7"></path>
+              <path d="M6.5 10v9h11v-9"></path></svg></span
+          ><span>Home</span>
+        </button>
+        <button class="rail-btn focusable" data-view="live" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <rect x="2.5" y="5" width="19" height="13" rx="2"></rect>
+              <path d="M10 9.5l5 3-5 3v-6z"></path></svg></span
+          ><span>Live</span>
+        </button>
+        <button class="rail-btn focusable" data-view="movies" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+              <path d="M8 5v14"></path>
+              <path d="M16 5v14"></path>
+              <path d="M3 12h18"></path></svg></span
+          ><span>Movies</span>
+        </button>
+        <button class="rail-btn focusable" data-view="series" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <rect x="4" y="5" width="16" height="3" rx="1"></rect>
+              <rect x="4" y="10.5" width="16" height="3" rx="1"></rect>
+              <rect x="4" y="16" width="16" height="3" rx="1"></rect></svg></span
+          ><span>Series</span>
+        </button>
+        <button class="rail-btn focusable" data-view="favorites" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <path
+                d="M12 3.8l2.6 5.2 5.8.9-4.2 4 1 5.7-5.2-2.7-5.2 2.7 1-5.7-4.2-4 5.8-.9z"
+              ></path></svg></span
+          ><span>Favorites</span>
+        </button>
+        <button class="rail-btn focusable" data-view="history" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+              <path d="M3 4v4h4"></path>
+              <path d="M12 7v5l3 2"></path></svg></span
+          ><span>History</span>
+        </button>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn focusable" data-view="settings" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <circle cx="12" cy="12" r="3.2"></circle>
+              <path d="M12 3v2.2"></path>
+              <path d="M12 18.8V21"></path>
+              <path d="M3 12h2.2"></path>
+              <path d="M18.8 12H21"></path>
+              <path d="M5.7 5.7l1.6 1.6"></path>
+              <path d="M16.7 16.7l1.6 1.6"></path>
+              <path d="M18.3 5.7l-1.6 1.6"></path>
+              <path d="M7.3 16.7l-1.6 1.6"></path></svg></span
+          ><span>Settings</span>
+        </button>
+        <button class="rail-btn focusable" id="logout-btn" tabindex="0">
+          <span class="ic" aria-hidden="true"
+            ><svg class="ic-svg" viewBox="0 0 24 24" focusable="false">
+              <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"></path>
+              <path d="M9 8l-4 4 4 4"></path>
+              <path d="M5 12h10"></path></svg></span
+          ><span>Exit</span>
+        </button>
+      </aside>
+
+      <main id="main">
+        <header id="topbar">
+          <div class="topbar-left">
+            <button id="source-menu-btn" class="source-btn focusable" type="button" tabindex="0">
+              No source
+            </button>
+            <div id="source-menu" class="source-menu"></div>
+            <div class="search-wrap">
+              <span class="search-ic"
+                ><svg
+                  class="icon-svg"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="M20 20l-4.2-4.2"></path>
+                </svg></span
+              >
+              <input
+                id="global-search"
+                class="focusable"
+                type="text"
+                tabindex="0"
+                placeholder="Search Movies, Live and Series..."
+              />
+            </div>
+          </div>
+          <div class="topbar-right topbar-clock">
+            <div id="topbar-time-value" class="topbar-time-value">12:00:00 AM</div>
+            <div id="topbar-date-value" class="topbar-date-value">Sun, 1 Jan 1970</div>
+          </div>
+        </header>
+
+        <div id="sync-progress" class="sync-progress hidden">
+          <div class="sync-progress-top">
+            <span id="sync-progress-label">Syncing</span>
+            <span id="sync-progress-count">0 / 0</span>
+          </div>
+          <div class="sync-progress-track">
+            <div id="sync-progress-fill" class="sync-progress-fill"></div>
+          </div>
+        </div>
+
+        <section id="workspace"></section>
+      </main>
+    </div>
+
+    <div id="overlay-player" class="overlay-player">
+      <video id="overlay-video" autoplay></video>
+      <div id="overlay-status" class="overlay-status"></div>
+      <div id="overlay-caption" class="overlay-caption" style="display: none">
+        <div class="overlay-caption-inner"></div>
+      </div>
+      <div id="overlay-head" class="overlay-head">
+        <div id="overlay-title">Now Playing</div>
+        <div id="overlay-subtitle"></div>
+      </div>
+      <div id="overlay-controls" class="overlay-controls">
+        <div class="overlay-progress">
+          <div id="overlay-progress-fill" class="overlay-progress-fill"></div>
+        </div>
+        <div class="overlay-times">
+          <span id="overlay-current-time">00:00</span>
+          <span>/</span>
+          <span id="overlay-total-time">00:00</span>
+        </div>
+        <div class="overlay-buttons">
+          <button
+            id="overlay-prev"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Previous"
+          >
+            ⏮
+          </button>
+          <button
+            id="overlay-rew"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Rewind 15 seconds"
+          >
+            ⏪
+          </button>
+          <button
+            id="overlay-playpause"
+            class="btn primary icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Pause"
+          >
+            ⏯
+          </button>
+          <button
+            id="overlay-fwd"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Forward 15 seconds"
+          >
+            ⏩
+          </button>
+          <button
+            id="overlay-subtitle-btn"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Subtitles"
+          >
+            CC
+          </button>
+          <button
+            id="overlay-quality-btn"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Video quality"
+          >
+            AUTO
+          </button>
+          <button
+            id="overlay-fullscreen-btn"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Fullscreen"
+          >
+            ⛶
+          </button>
+          <button
+            id="overlay-next"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Next"
+          >
+            ⏭
+          </button>
+          <button
+            id="overlay-favorite"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Favorite"
+          >
+            ☆
+          </button>
+          <button
+            id="overlay-close"
+            class="btn icon-only focusable"
+            type="button"
+            tabindex="0"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="overlay-hint" class="overlay-hint">
+          Arrow keys move focus · OK activate · CH +/- switch channel · Back close
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

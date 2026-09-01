@@ -1,0 +1,29 @@
+# Build outputs
+build/
+*.ipk
+dist/
+out/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Backup and temporary files
+*.bak
+*.tmp
+.backup/
