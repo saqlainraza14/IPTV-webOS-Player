@@ -5,15 +5,13 @@ An optimized, full-featured IPTV player designed specifically for **LG webOS Sma
 This app allows you to stream and organize Live TV channels, Movies, and Series from standard IPTV playlists/subscriptions with a TV-friendly user interface.
 
 > [!IMPORTANT]
-> TV Navigator app is a free, open-source player — it never sells IPTV subscriptions, channels, or playlists. Get the app only from the GitHub Releases. 
-
+> TV Navigator app is a free, open-source player — it never sells IPTV subscriptions, channels, or playlists. Get the app only from the GitHub Releases.
 
 <img width="1920" height="1565" alt="image" src="https://github.com/user-attachments/assets/08131283-2f5c-4f72-806b-ade419cf8375" />
 
 <img width="1920" height="869" alt="image" src="https://github.com/user-attachments/assets/2ab92b30-c001-4804-b028-00d79b2b5e8b" />
 
 <img width="1920" height="1133" alt="image" src="https://github.com/user-attachments/assets/50fe7c58-724f-40bc-ba93-42bb3bd9b651" />
-
 
 ## 🚀 Features
 
@@ -37,7 +35,6 @@ This app allows you to stream and organize Live TV channels, Movies, and Series 
   - Built-in multi-source router allowing you to add, edit, and switch between multiple IPTV connections.
   - IndexedDB storage integration for lightning-fast catalog caching.
 
-
 ## 🛠️ Project Structure
 
 ```
@@ -58,7 +55,6 @@ iptvnator-webos-clean/
 ├── build.sh              # One-click builder script for macOS/Linux
 └── build/                # Output folder for compiled IPK binaries
 ```
-
 
 ## 📦 How to Build the App
 
@@ -95,7 +91,6 @@ chmod +x build.sh
 ./build.sh
 ```
 
-
 ## 📺 Installation on LG webOS TVs
 
 ### Method 1: Installing via webOS SDK (ares-cli)
@@ -121,7 +116,6 @@ If you have the webOS CLI tools installed:
 
 You can sideload the generated `.ipk` package using community webOS managers like the **Homebrew Channel** (if rooted) or DevMode manager applications.
 
-
 ## 🔧 Technical Details & Old webOS 3.x Support
 
 - **Chromium 38 Compatibility**:
@@ -131,6 +125,12 @@ You can sideload the generated `.ipk` package using community webOS managers lik
 - **Offline / Local Hosting**:
   The player runs entirely client-side. The database operations use browser `localStorage` and `IndexedDB` caching mechanisms, making stream fetching incredibly efficient without stressing your IPTV server.
 
+## ⚠️ Disclaimer & Content Policy
+
+- **No Content Provided:** This application does not include, host, or provide any media content, streams, or playlists. It functions strictly as a media player shell.
+- **User Responsibility:** Users must provide their own legally obtained streams, M3U playlists, or Xtream Codes credentials.
+- **Copyright Compliance:** The developers of this project do not endorse, facilitate, or tolerate the streaming of copyrighted material without permission from the rightful owners.
+- **Limitation of Liability:** The authors are not responsible for how users utilize the application, nor are they liable for any third-party links or content loaded into the player.
 
 ## 📄 License
 
