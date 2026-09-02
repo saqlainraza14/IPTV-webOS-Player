@@ -4176,27 +4176,33 @@
     if (!video || !state.inline.record) {
       return;
     }
-    video.addEventListener("webkitbeginfullscreen", function () {
-      state.inline.fullscreen = true;
-    });
-    video.addEventListener("webkitendfullscreen", function () {
+    function handleInlineFullscreenExit() {
       state.inline.fullscreen = false;
       state.inline.ignoreBackUntil = Date.now() + 750;
       syncInlineFullscreenLayout();
       resetViewportScroll();
       restoreFocusToActiveLiveChannel();
+      // webOS can apply the native video viewport one frame after the event.
+      setTimeout(function () {
+        syncInlineFullscreenLayout();
+        resetViewportScroll();
+      }, 0);
+    }
+    video.addEventListener("webkitbeginfullscreen", function () {
+      state.inline.fullscreen = true;
+    });
+    video.addEventListener("webkitendfullscreen", function () {
+      handleInlineFullscreenExit();
     });
     if (!state.inline.fullscreenDocumentListenerBound) {
       state.inline.fullscreenDocumentListenerBound = true;
-      document.addEventListener("fullscreenchange", function () {
+      var onInlineFullscreenChange = function () {
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          state.inline.fullscreen = false;
-          state.inline.ignoreBackUntil = Date.now() + 750;
-          syncInlineFullscreenLayout();
-          resetViewportScroll();
-          restoreFocusToActiveLiveChannel();
+          handleInlineFullscreenExit();
         }
-      });
+      };
+      document.addEventListener("fullscreenchange", onInlineFullscreenChange);
+      document.addEventListener("webkitfullscreenchange", onInlineFullscreenChange);
     }
     var candidates = livePlaybackCandidates(state.inline.record);
     var candidateIndex = 0;
@@ -5457,6 +5463,7 @@
       ? movieActorNames(producerValue, 4)
       : trim(String(producerValue || ""));
     var releaseDate = formatMovieReleaseDate(movieInfoValue(record, seriesData, ["first_air_date", "first_aired", "air_date", "releasedate", "release_date", "year"], ""));
+    var favorite = isFavorite(record.uid);
     var existingShell = document.querySelector(".series-detail-shell");
     var detailShellMounted = !!(
       existingShell &&
@@ -5501,11 +5508,20 @@
         (director ? '<div class="mv-meta-item"><span>Director</span><b>' + escapeHtml(director) + '</b></div>' : "") +
         (producer ? '<div class="mv-meta-item"><span>Producer</span><b>' + escapeHtml(producer) + '</b></div>' : "") +
         (releaseDate !== "Not available" ? '<div class="mv-meta-item"><span>Initial release</span><b>' + escapeHtml(releaseDate) + '</b></div>' : "") +
-        '</div><div class="movie-detail-cast series-detail-cast">' +
+        '</div><div class="mv-actions series-detail-actions"><button id="series-detail-favorite" class="mv-btn mv-btn-dim focusable" type="button" tabindex="0">' +
+        mediaControlIconSvg(favorite ? "favorite" : "plus", favorite) +
+        '<span>' + (favorite ? "In favorites" : "Add to favorites") + '</span></button></div><div class="movie-detail-cast series-detail-cast">' +
         (castValue ? '<h2>Cast</h2><div class="movie-cast-row">' + movieCastHtml(castValue) + '</div>' : "") +
         '</div><div id="series-page-content"></div></div></div></div></div>';
       document.getElementById("series-detail-back").addEventListener("click", function () {
         returnToSeriesGrid();
+      });
+      document.getElementById("series-detail-favorite").addEventListener("click", function () {
+        toggleFavorite(record, true);
+        var on = isFavorite(record.uid);
+        this.innerHTML =
+          mediaControlIconSvg(on ? "favorite" : "plus", on) +
+          "<span>" + (on ? "In favorites" : "Add to favorites") + "</span>";
       });
     }
     if (!info) {
@@ -7532,9 +7548,9 @@
     tryPlay(video);
     if (video.webkitEnterFullscreen) {
       video.webkitEnterFullscreen();
-    } else if (video.requestFullscreen) {
+    } else if (!window.PalmSystem && video.requestFullscreen) {
       video.requestFullscreen();
-    } else if (video.webkitRequestFullscreen) {
+    } else if (!window.PalmSystem && video.webkitRequestFullscreen) {
       video.webkitRequestFullscreen();
     }
   }
@@ -7952,6 +7968,12 @@
           movieDetailModal.classList.add("open");
         }
         restoreFocusToMovieDetails();
+      } else if (
+        closingRecord.view === "episode" &&
+        state.view === "series" &&
+        state.series.selectedUid
+      ) {
+        focusFirst(".series-episode");
       } else {
         restoreFocusToOverlayRecord(closingRecord);
       }
@@ -8648,6 +8670,18 @@
         applyScroll(verticalHost, nodeRect);
       }
     }
+    if (host.classList && host.classList.contains("series-detail-shell")) {
+      // webOS can update focus before it updates the episode row geometry.
+      setTimeout(function () {
+        applyScroll(host, node.getBoundingClientRect());
+      }, 0);
+      setTimeout(function () {
+        applyScroll(host, node.getBoundingClientRect());
+      }, 80);
+      setTimeout(function () {
+        applyScroll(host, node.getBoundingClientRect());
+      }, 180);
+    }
   }
 
   function elementCenter(node) {
@@ -9330,8 +9364,16 @@
   }
 
   function handleBack() {
+    var movieModal = document.getElementById("movie-detail-modal");
+    var seriesShell = document.querySelector(".series-detail-shell");
+    var backButton;
     if (trailerState.open) {
-      closeTrailerPopup(true);
+      backButton = document.getElementById("trailer-close");
+      if (backButton && typeof backButton.click === "function") {
+        backButton.click();
+      } else {
+        closeTrailerPopup(true);
+      }
       return true;
     }
     if (isInlineNativeFullscreen(document.getElementById("inline-video"))) {
@@ -9346,11 +9388,36 @@
       return true;
     }
     if (state.overlay.open) {
-      closeOverlayPlayer();
+      backButton = dom.overlayClose;
+      if (backButton && typeof backButton.click === "function") {
+        backButton.click();
+      } else {
+        closeOverlayPlayer();
+      }
       return true;
     }
-    if (state.movieDetail.open) {
-      closeMovieDetails();
+    if (
+      state.movieDetail.open ||
+      (movieModal && movieModal.classList.contains("open"))
+    ) {
+      backButton = document.getElementById("movie-detail-close");
+      if (backButton && typeof backButton.click === "function") {
+        backButton.click();
+      } else {
+        closeMovieDetails();
+      }
+      return true;
+    }
+    if (seriesShell || (state.view === "series" && state.series.selectedUid)) {
+      backButton = document.getElementById("series-detail-back");
+      if (backButton && typeof backButton.click === "function") {
+        backButton.click();
+      } else if (state.series.selectedUid) {
+        returnToSeriesGrid();
+      } else {
+        state.view = "home";
+        renderCurrentView();
+      }
       return true;
     }
     if (dom.sourceMenu.classList.contains("open")) {
@@ -9369,6 +9436,22 @@
       state.view = "home";
       renderCurrentView();
       return true;
+    }
+
+    // With disableBackHistoryAPI=true, webOS no longer performs the default
+    // history-based BACK action for us. At the app root, explicitly hand the
+    // BACK action back to the webOS launcher (webOS 3.x/older TVs).
+    if (
+      typeof window.webOS !== "undefined" &&
+      window.webOS &&
+      typeof window.webOS.platformBack === "function"
+    ) {
+      try {
+        window.webOS.platformBack();
+        return true;
+      } catch (e) {
+        // Fall through if the platform API is unavailable on this firmware.
+      }
     }
     return false;
   }
@@ -9553,6 +9636,7 @@
     if (oldMenu) {
       closeSeriesSeasonMenu(false);
     }
+    scrollNodeIntoHost(select);
     menu = document.createElement("div");
     menu.id = "series-season-menu";
     menu.className = "series-season-menu";
@@ -9578,7 +9662,11 @@
     document.body.appendChild(menu);
     rect = select.getBoundingClientRect();
     menu.style.left = Math.max(12, rect.left) + "px";
-    menu.style.top = Math.max(12, rect.bottom + 8) + "px";
+    if (rect.bottom + 8 + menu.offsetHeight > window.innerHeight) {
+      menu.style.top = Math.max(12, rect.top - menu.offsetHeight - 8) + "px";
+    } else {
+      menu.style.top = Math.max(12, rect.bottom + 8) + "px";
+    }
     focusNode(menu.querySelector(".series-season-option.active") || menu.firstChild);
   }
 
@@ -9886,7 +9974,11 @@
     function normalizedRemoteCode(event) {
       var code = event.keyCode || event.which || 0;
       var key = event.key || "";
+      var keyIdentifier = event.keyIdentifier || "";
       if (code) {
+        if (code === 4) {
+          return 461;
+        }
         return code;
       }
       if (key === "ArrowLeft") {
@@ -9904,13 +9996,21 @@
       if (key === "Enter" || key === "OK") {
         return 13;
       }
-      if (key === "Backspace") {
+      if (key === "Backspace" || event.code === "Backspace" || keyIdentifier === "U+0008") {
         return 8;
       }
-      if (key === "Escape") {
+      if (key === "Escape" || event.code === "Escape" || keyIdentifier === "U+001B") {
         return 27;
       }
-      if (key === "GoBack" || key === "Back") {
+      if (
+        key === "GoBack" ||
+        key === "Back" ||
+        key === "Return" ||
+        key === "Exit" ||
+        key === "BrowserBack" ||
+        key === "XF86Back" ||
+        event.code === "BrowserBack"
+      ) {
         return 461;
       }
       if (key === "ChannelUp") {
@@ -10053,9 +10153,16 @@
       if (!event) {
         return;
       }
+      if (event.__tvnRemoteHandled) {
+        return;
+      }
+      event.__tvnRemoteHandled = true;
       var code = normalizedRemoteCode(event);
       if (!code) {
         return;
+      }
+      if (code === 461 || code === 10009 || code === 27 || code === 8) {
+        backKeydownSeen = true;
       }
       // Do NOT use event.defaultPrevented — webOS spatial navigation sets it
       // for every arrow key, which would block all remote navigation.
@@ -10063,6 +10170,7 @@
       try {
         var activeTag = document.activeElement ? document.activeElement.tagName : "";
         var isInput = activeTag === "INPUT" || activeTag === "TEXTAREA";
+        var movieDetailModal = document.getElementById("movie-detail-modal");
         if (handleConfirmDialogKeys(code)) {
           event.preventDefault();
           return;
@@ -10071,7 +10179,7 @@
           event.preventDefault();
           return;
         }
-        if (code === 461 || code === 10009 || code === 27 || (code === 8 && !isInput)) {
+        if (code === 461 || code === 10009 || code === 27 || code === 8) {
           // On webOS 3.x: BACK while a modal input is focused dismisses the
           // virtual keyboard instead of closing the modal.
           if (
@@ -10094,6 +10202,34 @@
               }
               if (btn) focusNode(btn);
             }, 80);
+            return;
+          }
+          if (code === 8 && state.overlay.open) {
+            closeOverlayPlayer();
+            event.preventDefault();
+            return;
+          }
+          if (
+            code === 8 &&
+            ((state.movieDetail.open) ||
+              (movieDetailModal && movieDetailModal.classList.contains("open")))
+          ) {
+            closeMovieDetails();
+            event.preventDefault();
+            return;
+          }
+          if (
+            code === 8 &&
+            (document.querySelector(".series-detail-shell") ||
+              (state.view === "series" && state.series.selectedUid))
+          ) {
+            if (state.series.selectedUid) {
+              returnToSeriesGrid();
+            } else {
+              state.view = "home";
+              renderCurrentView();
+            }
+            event.preventDefault();
             return;
           }
           if (handleBack()) {
@@ -10261,7 +10397,57 @@
       }
     }
 
+    var backKeydownSeen = false;
+
+    // LG webOS 3.x: the physical Magic Remote BACK key is delivered as
+    // keyCode 461 (older firmware/remotes may use 10009 or 4).  Capture it
+    // at the window level before normal/bubble-phase handlers so the TV
+    // platform cannot consume the event before our navigation code sees it.
+    function onWebOSBackCapture(event) {
+      if (!event || event.__tvnRemoteHandled) {
+        return;
+      }
+      var rawCode = event.keyCode || event.which || 0;
+      if (rawCode !== 461 && rawCode !== 10009 && rawCode !== 4) {
+        return;
+      }
+
+      event.__tvnRemoteHandled = true;
+      backKeydownSeen = true;
+
+      try {
+        if (handleBack()) {
+          event.preventDefault();
+          if (typeof event.stopImmediatePropagation === "function") {
+            event.stopImmediatePropagation();
+          } else if (typeof event.stopPropagation === "function") {
+            event.stopPropagation();
+          }
+        }
+      } catch (e) {
+        // Keep the remote usable even if a view-specific back action fails.
+      }
+    }
+
+    window.addEventListener("keydown", onWebOSBackCapture, true);
     document.addEventListener("keydown", onRemoteKeydown);
+    window.addEventListener("keydown", onRemoteKeydown);
+    function onBackKeyup(event) {
+      var code = normalizedRemoteCode(event);
+      var isBack = code === 461 || code === 10009 || code === 27 || code === 8;
+      if (isBack && !backKeydownSeen) {
+        if (handleBack()) {
+          event.preventDefault();
+        }
+      }
+      backKeydownSeen = false;
+    }
+    window.addEventListener("keyup", onBackKeyup, true);
+    window.addEventListener("popstate", function (event) {
+      if (handleBack()) {
+        event.preventDefault();
+      }
+    });
 
     // webOS 3.x fallback: some remotes fire keyup for OK when a button is focused.
     // If the keydown handler already processed OK we skip; otherwise fire click here.

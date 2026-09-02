@@ -1676,9 +1676,19 @@ body.tvn-density-premium .poster-card--live .poster {
   position: relative;
   width: 100%;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   color: #f6f9ff;
   background: #0b0d11;
+}
+
+#workspace > .series-detail-shell {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
 }
 
 .series-detail-shell::-webkit-scrollbar,
@@ -2216,7 +2226,8 @@ body.tvn-density-premium .poster-card--live .poster {
   flex-shrink: 0;
 }
 
-#movie-detail-favorite .icon-svg.icon-solid {
+#movie-detail-favorite .icon-svg.icon-solid,
+#series-detail-favorite .icon-svg.icon-solid {
   color: #ffd569;
 }
 
