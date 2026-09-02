@@ -44,19 +44,7 @@
         };
       })();
     </script>
-    <script src="polyfills.js"></script>
-    <script>
-      if (window._sd) window._sd("polyfills OK");
-    </script>
-    <script src="hls.min.js"></script>
-    <script>
-      if (window._sd) window._sd("hls.min.js OK");
-    </script>
-    <script src="mpegts.min.js"></script>
-    <script>
-      if (window._sd) window._sd("mpegts OK — app.js loading...");
-    </script>
-    <!-- Redirect to dedicated login page when no source is saved yet -->
+    <!-- Redirect before loading large playback libraries when no source exists. -->
     <script>
       (function () {
         try {
@@ -69,6 +57,25 @@
           window.location.replace("login.html");
         }
       })();
+    </script>
+    <script src="polyfills.js"></script>
+    <script>
+      if (window._sd) window._sd("polyfills OK");
+    </script>
+    <script src="hls.min.js"></script>
+    <script>
+      if (window._sd) window._sd("hls.min.js OK");
+    </script>
+    <script>
+      (function () {
+        var video = document.createElement("video");
+        if (!video.canPlayType || !video.canPlayType("video/mp2t")) {
+          document.write('<script src="mpegts.min.js"><\/script>');
+        }
+      })();
+    </script>
+    <script>
+      if (window._sd) window._sd("mpegts OK — app.js loading...");
     </script>
   </head>
   <body>
