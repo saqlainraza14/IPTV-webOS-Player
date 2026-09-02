@@ -35,8 +35,8 @@ if exist hls.min.js (
 ) else (
     where curl >nul 2>&1
     if !ERRORLEVEL! EQU 0 (
-        echo       Downloading HLS.js 0.8.9 (Chromium 38 compatible)...
-        curl -L -o hls.min.js "https://cdn.jsdelivr.net/npm/hls.js@0.8.9/dist/hls.min.js"
+        echo       Downloading HLS.js 1.6.16 (ES5 build)...
+        curl -L -o hls.min.js "https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js"
         if !ERRORLEVEL! EQU 0 (
             echo       hls.min.js downloaded.
         ) else (
@@ -132,7 +132,7 @@ goto :eof
 echo /* HLS.js CDN fallback loader */ > hls.min.js
 echo (function(){ >> hls.min.js
 echo   var s = document.createElement('script'); >> hls.min.js
-echo   s.src = 'https://cdn.jsdelivr.net/npm/hls.js@0.8.9/dist/hls.min.js'; >> hls.min.js
+echo   s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js'; >> hls.min.js
 echo   document.head.appendChild(s); >> hls.min.js
 echo })(); >> hls.min.js
 goto :eof

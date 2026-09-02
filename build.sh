@@ -38,18 +38,18 @@ echo "[2/3] Checking for hls.min.js..."
 if [ -f hls.min.js ]; then
     echo "      hls.min.js already present."
 elif command -v curl &>/dev/null; then
-    echo "      Downloading HLS.js 0.8.9 (Chromium 38 compatible)..."
-    curl -L -o hls.min.js "https://cdn.jsdelivr.net/npm/hls.js@0.8.9/dist/hls.min.js" \
+    echo "      Downloading HLS.js 1.6.16 (ES5 build)..."
+    curl -L -o hls.min.js "https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js" \
       && echo "      hls.min.js downloaded." \
       || { echo "      Download failed — creating CDN stub."; cat >hls.min.js <<'JS'
 /* HLS.js CDN fallback */
-(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@0.8.9/dist/hls.min.js';document.head.appendChild(s);})();
+(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js';document.head.appendChild(s);})();
 JS
 }
 else
     cat >hls.min.js <<'JS'
 /* HLS.js CDN fallback */
-(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@0.8.9/dist/hls.min.js';document.head.appendChild(s);})();
+(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js';document.head.appendChild(s);})();
 JS
     echo "      Created CDN stub (curl not available)."
 fi
