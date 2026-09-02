@@ -38,6 +38,25 @@
     return;
   }
 
+  (function applyStoredTheme() {
+    var theme = "aurora";
+    try {
+      var rawSettings = localStorage.getItem("tvn_settings");
+      var settings = rawSettings ? JSON.parse(rawSettings) : {};
+      theme = settings && settings.theme ? settings.theme : theme;
+    } catch (e) {}
+    if (
+      theme !== "dark" &&
+      theme !== "light" &&
+      theme !== "oled" &&
+      theme !== "magenta" &&
+      theme !== "aurora"
+    ) {
+      theme = "aurora";
+    }
+    document.body.className = "tvn-theme-" + theme;
+  })();
+
   /* ── DOM refs ────────────────────────────────────────────── */
   var tabXtream = document.getElementById("lp-tab-xtream");
   var tabM3u = document.getElementById("lp-tab-m3u");
@@ -74,8 +93,6 @@
     var el = document.activeElement;
     box.textContent = msg + " | focus: " + (el ? el.id || el.tagName : "none");
   }
-  diag("login.js loaded");
-
   /* ── active tab ──────────────────────────────────────────── */
   var activeTab = "xtream";
 
@@ -419,22 +436,12 @@
     return 0;
   }
 
-  /* Dedup: document + window both fire; ignore repeats within 60 ms */
-  var _lastCode = 0;
-  var _lastTime = 0;
-
   document.addEventListener("keydown", onKey);
-  window.addEventListener("keydown", onKey);
 
   function onKey(event) {
     if (!event) return;
     var code = normalizedCode(event);
     if (!code) return;
-    diag("key " + code);
-    var now = Date.now();
-    if (code === _lastCode && now - _lastTime < 60) return;
-    _lastCode = code;
-    _lastTime = now;
 
     var isBack = code === 461 || code === 10009 || code === 27;
     var active = document.activeElement;
@@ -471,19 +478,11 @@
     }
 
     if (code === 37 || code === 38 || code === 39 || code === 40) {
-      // Do NOT preventDefault: webOS spatial navigation may handle this.
-      // If focus has not moved by the next tick, move it ourselves.
-      var prev = document.activeElement;
-      setTimeout(function () {
-        if (document.activeElement !== prev) {
-          syncSelectionToFocus();
-          return;
-        }
-        if (code === 38) move(-1, 0);
-        else if (code === 40) move(1, 0);
-        else if (code === 37) move(0, -1);
-        else move(0, 1);
-      }, 0);
+      if (code === 38) move(-1, 0);
+      else if (code === 40) move(1, 0);
+      else if (code === 37) move(0, -1);
+      else move(0, 1);
+      event.preventDefault();
     }
   }
 

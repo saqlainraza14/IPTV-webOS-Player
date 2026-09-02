@@ -12,6 +12,7 @@
         try {
           var b = document.getElementById("lp-diag");
           if (b) {
+            b.style.display = "block";
             b.style.color = "#ff9aa2";
             b.textContent =
               "JS ERROR: " +
@@ -185,6 +186,226 @@
         color: #5d6b7d;
         text-align: right;
         font-family: monospace;
+        display: none;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 10% 8%, rgba(52, 226, 182, 0.32), transparent 28%),
+          radial-gradient(circle at 88% 92%, rgba(255, 116, 190, 0.2), transparent 32%),
+          linear-gradient(145deg, #102344 0%, #1c245a 55%, #30205a 100%);
+        color: #f9fbff;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+      #login-card {
+        width: 1180px;
+        max-width: 90vw;
+        max-height: 92vh;
+        overflow: auto;
+        background: rgba(20, 30, 63, 0.96);
+        border: 1px solid rgba(158, 228, 255, 0.38);
+        border-radius: 18px;
+        padding: 38px 44px 32px;
+        -webkit-box-shadow: 0 20px 60px rgba(3, 7, 20, 0.4);
+        box-shadow: 0 20px 60px rgba(3, 7, 20, 0.4);
+      }
+      .lp-head {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        margin-bottom: 30px;
+      }
+      .lp-head .brand-mark {
+        width: 86px;
+        height: 86px;
+        margin-right: 22px;
+        -webkit-flex-shrink: 0;
+        flex-shrink: 0;
+      }
+      .lp-head h1 {
+        margin: 0;
+        font-size: 48px;
+        line-height: 1.1;
+        color: #f9fbff;
+      }
+      .lp-tabs {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        margin-bottom: 26px;
+        border-bottom: 1px solid rgba(158, 228, 255, 0.2);
+      }
+      .tab-btn {
+        min-width: 190px;
+        min-height: 62px;
+        margin-right: 12px;
+        border: 1px solid rgba(158, 228, 255, 0.28);
+        border-radius: 12px 12px 0 0;
+        background: rgba(27, 37, 76, 0.84);
+        color: #b9c8de;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .tab-btn.active {
+        background: rgba(67, 213, 193, 0.28);
+        border-color: #63e1d2;
+        color: #ffffff;
+      }
+      .lp-fields {
+        margin-bottom: 26px;
+      }
+      .lp-field-row {
+        margin-bottom: 18px;
+      }
+      .lp-field {
+        padding-right: 14px;
+      }
+      .lp-field label {
+        margin-bottom: 9px;
+        color: #b9c8de;
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .lp-field input {
+        height: 68px;
+        border-radius: 10px;
+        border: 1px solid rgba(158, 228, 255, 0.28);
+        background: rgba(12, 19, 42, 0.72);
+        color: #ffffff;
+        padding: 0 18px;
+        font-size: 25px;
+      }
+      .lp-field input:focus {
+        outline: none;
+        border-color: #63e1d2;
+        -webkit-box-shadow: 0 0 0 4px rgba(99, 225, 210, 0.28);
+        box-shadow: 0 0 0 4px rgba(99, 225, 210, 0.28);
+      }
+      .lp-error {
+        margin-bottom: 18px;
+        border: 1px solid rgba(255, 146, 158, 0.42);
+        border-radius: 10px;
+        background: rgba(166, 44, 56, 0.2);
+        color: #ffd0d5;
+      }
+      .lp-actions {
+        margin-top: 6px;
+      }
+      .lp-actions .btn {
+        min-width: 190px;
+        min-height: 64px;
+        border-radius: 10px;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .lp-actions .btn.primary {
+        background: #63e1d2;
+        border-color: #63e1d2;
+        color: #06241f;
+      }
+      #lp-hint {
+        margin-top: 22px;
+        color: #9db0c9;
+        font-size: 19px;
+      }
+      body.tvn-theme-light {
+        background: linear-gradient(145deg, #dceeff 0%, #f6f9ff 60%, #d9f5ef 100%);
+        color: #102344;
+      }
+      body.tvn-theme-light #login-card {
+        background: rgba(255, 255, 255, 0.96);
+        border-color: rgba(18, 56, 106, 0.24);
+        -webkit-box-shadow: 0 20px 60px rgba(18, 56, 106, 0.18);
+        box-shadow: 0 20px 60px rgba(18, 56, 106, 0.18);
+      }
+      body.tvn-theme-light .lp-head h1,
+      body.tvn-theme-light .lp-field input {
+        color: #102344;
+      }
+      body.tvn-theme-light .lp-field label,
+      body.tvn-theme-light #lp-hint {
+        color: #46617f;
+      }
+      body.tvn-theme-light .lp-field input {
+        background: #f3f7fc;
+        border-color: rgba(18, 56, 106, 0.24);
+      }
+      body.tvn-theme-light .tab-btn {
+        background: #edf4fb;
+        color: #46617f;
+      }
+      body.tvn-theme-light .tab-btn.active {
+        background: #d7f3ee;
+        border-color: #168d7f;
+        color: #073d36;
+      }
+      body.tvn-theme-oled #login-card {
+        background: #050708;
+        border-color: rgba(0, 255, 255, 0.48);
+      }
+      body.tvn-theme-oled .lp-actions .btn.primary {
+        background: #00ffff;
+        border-color: #00ffff;
+      }
+      body.tvn-theme-magenta #login-card {
+        background: rgba(38, 8, 45, 0.96);
+        border-color: rgba(255, 102, 215, 0.48);
+      }
+      body.tvn-theme-magenta .tab-btn.active,
+      body.tvn-theme-magenta .lp-actions .btn.primary {
+        background: #ff66d7;
+        border-color: #ff66d7;
+        color: #2a0322;
+      }
+
+      @media screen and (min-width: 1600px) and (min-height: 900px) {
+        #login-card {
+          width: 1320px;
+          max-width: 86vw;
+          padding: 48px 58px 40px;
+        }
+        .lp-head {
+          margin-bottom: 38px;
+        }
+        .lp-head .brand-mark {
+          width: 104px;
+          height: 104px;
+          margin-right: 28px;
+        }
+        .lp-head h1 {
+          font-size: 58px;
+        }
+        .lp-tabs {
+          margin-bottom: 32px;
+        }
+        .tab-btn {
+          min-width: 220px;
+          min-height: 72px;
+          font-size: 28px;
+        }
+        .lp-field-row {
+          margin-bottom: 24px;
+        }
+        .lp-field label {
+          margin-bottom: 12px;
+          font-size: 26px;
+        }
+        .lp-field input {
+          height: 80px;
+          font-size: 29px;
+        }
+        .lp-actions .btn {
+          min-width: 220px;
+          min-height: 74px;
+          font-size: 28px;
+        }
+        #lp-hint {
+          margin-top: 28px;
+          font-size: 22px;
+        }
       }
     </style>
   </head>
@@ -196,10 +417,6 @@
             <img class="brand-logo" src="new-logo.png" alt="IPTV logo" />
           </div>
           <h1>TV Navigator</h1>
-          <p>
-            Add an IPTV source. This clean-room TV app is inspired by desktop
-            IPTV players, but rebuilt for LG webOS 3.x.
-          </p>
         </div>
 
         <div class="lp-tabs">
@@ -279,7 +496,7 @@
                 placeholder="Remote Playlist"
               />
             </div>
-            <div class="lp-field lp-field-wide" style="width: 50%">
+            <div class="lp-field lp-field-wide">
               <label for="lp-m3u-url">M3U URL</label>
               <input
                 id="lp-m3u-url"
@@ -330,7 +547,7 @@
           ▲▼◀▶ move &nbsp;·&nbsp; OK on a field to type &nbsp;·&nbsp; BACK when
           done typing
         </div>
-        <div id="lp-diag">starting…</div>
+        <div id="lp-diag"></div>
       </div>
       <!-- /login-card -->
     </div>
