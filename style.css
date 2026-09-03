@@ -400,6 +400,16 @@ input:focus {
   position: relative;
 }
 
+#workspace.workspace-series-detail {
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+#workspace.workspace-series-detail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 #workspace > .split-layout,
 #workspace > .home-wrap,
 #workspace > .empty-state,
@@ -821,7 +831,7 @@ input:focus {
 }
 
 .category-pane {
-  width: 320px;
+  width: 420px;
   -webkit-flex-shrink: 0;
   flex-shrink: 0;
   min-height: 0;
@@ -904,7 +914,7 @@ input:focus {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px;
+  padding: 12px 0 12px 12px;
 }
 
 .detail-pane {
@@ -1589,19 +1599,19 @@ body.tvn-density-premium .episode-row .poster-card {
 }
 
 body.tvn-density-premium .poster-card {
-  width: 220px;
-  min-height: 398px;
+  width: 250px;
+  min-height: 450px;
   margin-right: 14px;
   margin-bottom: 14px;
   border-radius: 0;
 }
 
 body.tvn-density-premium .poster-card .poster {
-  height: 298px;
+  height: 338px;
 }
 
 body.tvn-density-premium .poster-card--title-overlay .poster {
-  height: 396px;
+  height: 450px;
 }
 
 body.tvn-density-premium .poster-card .poster-body {
@@ -1625,6 +1635,13 @@ body.tvn-density-premium .poster-meta {
 
 body.tvn-density-premium .poster-card--live .poster {
   padding: 14px;
+}
+
+/* Keep premium cards large with a compact, consistent row rhythm. */
+body.tvn-density-premium .grid-wrap {
+  -webkit-box-pack: start;
+  -webkit-justify-content: flex-start;
+  justify-content: flex-start;
 }
 
 .modal {
@@ -1675,20 +1692,10 @@ body.tvn-density-premium .poster-card--live .poster {
 .series-detail-shell {
   position: relative;
   width: 100%;
-  height: 100%;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  min-height: 100%;
+  overflow: visible;
   color: #f6f9ff;
   background: #0b0d11;
-}
-
-#workspace > .series-detail-shell {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
 }
 
 .series-detail-shell::-webkit-scrollbar,
@@ -1842,7 +1849,7 @@ body.tvn-density-premium .poster-card--live .poster {
   display: -webkit-flex;
   display: flex;
   width: 100%;
-  min-height: 124px;
+  min-height: 156px;
   margin-bottom: 10px;
   padding: 10px 18px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1857,9 +1864,9 @@ body.tvn-density-premium .poster-card--live .poster {
 }
 
 .series-episode-number {
-  width: 46px;
+  width: 54px;
   color: #8d9aae;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   text-align: center;
   -webkit-flex-shrink: 0;
@@ -1867,9 +1874,10 @@ body.tvn-density-premium .poster-card--live .poster {
 }
 
 .series-episode-artwork {
-  width: 156px;
-  height: 88px;
-  margin: 0 20px 0 12px;
+  position: relative;
+  width: 190px;
+  height: 108px;
+  margin: 0 24px 0 14px;
   overflow: hidden;
   border-radius: 5px;
   background: #080b12;
@@ -1879,9 +1887,57 @@ body.tvn-density-premium .poster-card--live .poster {
 
 .series-episode-artwork img {
   display: block;
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  object-position: center center;
+}
+
+.series-episode-artwork .series-episode-artwork-backdrop {
+  position: absolute;
+  z-index: 0;
+  top: -12px;
+  right: -12px;
+  bottom: -12px;
+  left: -12px;
+  width: calc(100% + 24px);
+  height: calc(100% + 24px);
   object-fit: cover;
+  filter: blur(12px);
+  opacity: 0.55;
+}
+
+.series-episode-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.series-episode-progress b {
+  display: block;
+  height: 100%;
+  background: #e5484d;
+}
+
+.series-episode-watched {
+  position: absolute;
+  right: 9px;
+  bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(8, 13, 20, 0.9);
+  color: #8ff0b5;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.series-episode.watched .series-episode-number {
+  color: #8ff0b5;
 }
 
 .series-episode-copy {
@@ -1897,15 +1953,15 @@ body.tvn-density-premium .poster-card--live .poster {
 }
 
 .series-episode-copy b {
-  margin-bottom: 7px;
-  font-size: 21px;
+  margin-bottom: 8px;
+  font-size: 25px;
 }
 
 .series-episode-copy small {
-  max-height: 43px;
+  max-height: 49px;
   overflow: hidden;
   color: #aab4c2;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.35;
 }
 
@@ -1913,14 +1969,19 @@ body.tvn-density-premium .poster-card--live .poster {
   max-height: none;
   margin-bottom: 4px;
   color: #d7e5f5;
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .series-episode-duration {
-  width: 84px;
+  min-width: 72px;
   margin-left: 18px;
-  color: #aab4c2;
-  font-size: 17px;
+  padding: 8px 12px;
+  border: 1px solid #7fe39b;
+  border-radius: 999px;
+  background: #b8f3c8;
+  color: #123b25;
+  font-size: 19px;
+  font-weight: 700;
   text-align: right;
   -webkit-flex-shrink: 0;
   flex-shrink: 0;
@@ -1984,6 +2045,38 @@ body.tvn-density-premium .poster-card--live .poster {
 .mv-body {
   position: relative;
   padding: 34px 60px 60px;
+}
+
+.movie-detail-loading-content {
+  position: relative;
+  min-height: 420px;
+  padding-top: 130px;
+  text-align: center;
+}
+
+.movie-detail-loading-content .loading-orbit {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 24px;
+}
+
+.movie-detail-loading-content h1 {
+  max-width: 900px;
+  margin: 0 auto 14px;
+  font-size: 42px;
+  line-height: 1.15;
+}
+
+.movie-detail-loading-content p {
+  margin: 0 0 8px;
+  color: #f6f9ff;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.movie-detail-loading-content .loading-caption {
+  display: block;
+  font-size: 18px;
 }
 
 .mv-back {
@@ -2226,11 +2319,6 @@ body.tvn-density-premium .poster-card--live .poster {
   flex-shrink: 0;
 }
 
-#movie-detail-favorite .icon-svg.icon-solid,
-#series-detail-favorite .icon-svg.icon-solid {
-  color: #ffd569;
-}
-
 .mv-btn-light {
   background: #ffffff;
   color: #10141c;
@@ -2258,6 +2346,65 @@ body.tvn-density-premium .poster-card--live .poster {
   color: #f2f6fc;
 }
 
+.mv-btn.favorite-remove,
+.favorite-control.favorite-remove {
+  background: #b9414b;
+  color: #ffffff;
+}
+
+.overlay-buttons .favorite-control.favorite-remove {
+  background: #b9414b !important;
+  border-color: #b9414b;
+  color: #ffffff;
+}
+
+.mv-btn.favorite-remove .icon-svg,
+.favorite-control.favorite-remove .icon-svg {
+  color: #ffffff;
+}
+
+.favorite-control {
+  display: -webkit-inline-box;
+  display: -webkit-inline-flex;
+  display: inline-flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  min-width: 190px;
+  height: 56px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mv-btn.favorite-control {
+  height: 76px;
+}
+
+.favorite-control .icon-svg {
+  width: 22px;
+  height: 22px;
+  margin-right: 9px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.favorite-control .icon-check {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.5;
+}
+
+.inline-overlay-controls .favorite-control,
+.overlay-buttons .favorite-control {
+  min-width: 190px;
+  padding: 0 14px;
+}
+
 .mv-btn-accent {
   background: #2f7ee0;
   color: #ffffff;
@@ -2273,7 +2420,10 @@ body.tvn-density-premium .poster-card--live .poster {
   display: -webkit-box;
   display: -webkit-flex;
   display: flex;
-  overflow-x: auto;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  max-height: none;
+  overflow: visible;
   padding: 8px 8px 12px;
 }
 
@@ -2895,6 +3045,112 @@ body.tvn-theme-light .segment-btn.active {
   color: #153457;
 }
 
+body.tvn-tv-scale .rail-btn {
+  font-size: 21px;
+}
+
+body.tvn-tv-scale .rail-btn .ic {
+  font-size: 42px;
+}
+
+body.tvn-tv-scale .topbar-time-value {
+  font-size: 36px;
+}
+
+body.tvn-tv-scale .topbar-date-value,
+body.tvn-tv-scale .source-btn,
+body.tvn-tv-scale #global-search,
+body.tvn-tv-scale .icon-btn,
+body.tvn-tv-scale .btn,
+body.tvn-tv-scale .tab-btn,
+body.tvn-tv-scale .category-btn,
+body.tvn-tv-scale .segment-btn {
+  font-size: 23px;
+}
+
+body.tvn-tv-scale .category-pane {
+  width: 460px;
+}
+
+body.tvn-tv-scale .split-layout--wide .category-pane {
+  width: 460px;
+}
+
+body.tvn-tv-scale .category-btn {
+  min-height: 72px;
+  padding-right: 16px;
+  padding-left: 16px;
+}
+
+body.tvn-tv-scale .category-label {
+  font-size: 31px;
+}
+
+body.tvn-tv-scale .category-count {
+  font-size: 21px;
+}
+
+body.tvn-tv-scale .section-title,
+body.tvn-tv-scale .series-page-title {
+  font-size: 44px;
+}
+
+body.tvn-tv-scale .section-subtitle,
+body.tvn-tv-scale .muted,
+body.tvn-tv-scale .section-count,
+body.tvn-tv-scale .card-subtitle,
+body.tvn-tv-scale .epg-meta,
+body.tvn-tv-scale .source-subline,
+body.tvn-tv-scale .inline-meta {
+  font-size: 22px;
+}
+
+body.tvn-tv-scale .card-title {
+  font-size: 31px;
+}
+
+body.tvn-tv-scale .poster-title {
+  font-size: 22px;
+}
+
+body.tvn-tv-scale .poster-meta {
+  font-size: 17px;
+}
+
+body.tvn-tv-scale .mv-title {
+  font-size: 70px;
+}
+
+body.tvn-tv-scale .mv-chip {
+  font-size: 23px;
+}
+
+body.tvn-tv-scale .mv-plot {
+  font-size: 25px;
+}
+
+body.tvn-tv-scale .mv-meta-item span {
+  font-size: 20px;
+}
+
+body.tvn-tv-scale .mv-meta-item b {
+  font-size: 24px;
+}
+
+body.tvn-tv-scale .mv-btn {
+  min-width: 230px;
+  height: 82px;
+  font-size: 27px;
+}
+
+body.tvn-tv-scale .movie-detail-cast h2 {
+  font-size: 30px;
+}
+
+body.tvn-tv-scale .movie-cast-person {
+  font-size: 19px;
+}
+
 body.tvn-theme-light .home-top-shell,
 body.tvn-theme-light .home-top-card,
 body.tvn-theme-light .home-top-open,
@@ -3020,6 +3276,93 @@ body.tvn-theme-light .epg-card.live-now {
   border-top-color: #6fa8ff;
   -webkit-animation: spin 0.8s linear infinite;
   animation: spin 0.8s linear infinite;
+}
+
+.loading-state {
+  position: relative;
+  min-height: 240px;
+  padding: 28px;
+  border: 1px solid rgba(126, 177, 224, 0.2);
+  background: linear-gradient(145deg, rgba(20, 31, 48, 0.92), rgba(16, 20, 29, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.loading-orbit {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 18px;
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #69d7d0;
+  border-right-color: #7da8ff;
+  border-radius: 50%;
+  -webkit-animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
+}
+
+.loading-orbit:after {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  border: 2px solid rgba(255, 213, 105, 0.72);
+  border-left-color: transparent;
+  border-radius: 50%;
+  content: "";
+}
+
+.loading-orbit i {
+  position: absolute;
+  top: -7px;
+  left: 22px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffd569;
+  box-shadow: 0 0 14px rgba(255, 213, 105, 0.9);
+}
+
+.loading-state p,
+.inline-video-empty p {
+  color: #f6f9ff;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.loading-caption {
+  display: block;
+  margin-top: 8px;
+  color: #9fb0c5;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.overlay-status {
+  text-align: center;
+}
+
+.overlay-status .loading-orbit {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+}
+
+.overlay-status > span {
+  display: block;
+  color: #f6f9ff;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.overlay-status .loading-caption {
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.inline-video-empty .loading-orbit {
+  margin-right: auto;
+  margin-left: auto;
 }
 
 @-webkit-keyframes spin {
@@ -3868,4 +4211,52 @@ body.tvn-theme-aurora .content-card:focus {
   border-color: #ffffff !important;
   -webkit-box-shadow: 0 0 0 8px rgba(99, 225, 210, 0.9) !important;
   box-shadow: 0 0 0 8px rgba(99, 225, 210, 0.9) !important;
+}
+
+.category-btn.category-kind-live {
+  border-left: 6px solid #ef6b73 !important;
+}
+
+.category-btn.category-kind-movies {
+  border-left: 6px solid #f2b84b !important;
+}
+
+.category-btn.category-kind-series {
+  border-left: 6px solid #65c7db !important;
+}
+
+.category-btn.category-kind-live .category-count,
+.category-btn.category-kind-movies .category-count,
+.category-btn.category-kind-series .category-count {
+  min-width: 44px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.category-btn.category-kind-live .category-count {
+  background: rgba(239, 107, 115, 0.2);
+  color: #ffb0b5;
+}
+
+.category-btn.category-kind-movies .category-count {
+  background: rgba(242, 184, 75, 0.2);
+  color: #ffe09a;
+}
+
+.category-btn.category-kind-series .category-count {
+  background: rgba(101, 199, 219, 0.2);
+  color: #b5f1fa;
+}
+
+.category-btn.category-kind-live.active {
+  background: rgba(239, 107, 115, 0.2) !important;
+}
+
+.category-btn.category-kind-movies.active {
+  background: rgba(242, 184, 75, 0.2) !important;
+}
+
+.category-btn.category-kind-series.active {
+  background: rgba(101, 199, 219, 0.2) !important;
 }

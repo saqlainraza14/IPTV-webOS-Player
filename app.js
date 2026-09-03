@@ -24,6 +24,7 @@
   var KEY_FAVORITES = "tvn_favorites";
   var KEY_HISTORY = "tvn_history";
   var KEY_POSITIONS = "tvn_positions";
+  var KEY_WATCHED_EPISODES = "tvn_watched_episodes";
   var KEY_SETTINGS = "tvn_settings";
   var KEY_CACHE_COUNTS = "tvn_cache_counts_v1";
   var CACHE_DB_NAME = "tvn_cache_db";
@@ -53,6 +54,7 @@
     favorites: loadArray(KEY_FAVORITES),
     history: loadArray(KEY_HISTORY),
     positions: loadObject(KEY_POSITIONS),
+    watchedEpisodes: loadObject(KEY_WATCHED_EPISODES),
     settings: mergeSettings(loadObject(KEY_SETTINGS)),
     searchQuery: "",
     categorySearch: {
@@ -337,7 +339,8 @@
       theme: "aurora",
       fastStartup: true,
       osApiKey: "Ai44IgjqwXW1Cku062F9pwbGm7dS2pMw",
-      omdbApiKey: "ef4e2333"
+      omdbApiKey: "ef4e2333",
+      tmdbApiKey: ""
     };
     var key;
     for (key in saved) {
@@ -390,6 +393,17 @@
     root.classList.remove("tvn-density-premium");
     if (state.settings.cardDensity === "premium") {
       root.classList.add("tvn-density-premium");
+    }
+  }
+
+  function applyDisplayScaleClass() {
+    var root = document.body;
+    if (!root || !root.classList) {
+      return;
+    }
+    root.classList.remove("tvn-tv-scale");
+    if (isWebOSRuntime()) {
+      root.classList.add("tvn-tv-scale");
     }
   }
 
@@ -471,6 +485,10 @@
     }
     positionsQuotaWarned = true;
     showToast("Storage full - older resume points were removed", false);
+  }
+
+  function saveWatchedEpisodes() {
+    saveJson(KEY_WATCHED_EPISODES, state.watchedEpisodes);
   }
 
   // Playback ticks twice a second; serialising the whole bucket that often stalls webOS.
@@ -665,6 +683,7 @@
     state.history = [];
     state.favorites = [];
     state.positions = {};
+    state.watchedEpisodes = {};
     homeCountSyncState = {};
     Array.prototype.forEach.call(sources, function (source) {
       if (source && source.id) {
@@ -675,6 +694,7 @@
     saveHistory();
     saveFavorites();
     savePositions();
+    saveWatchedEpisodes();
     resetViewState();
     renderCurrentView();
     showToast("Local data cleared. Sync categories to load content.", true, 2600);
@@ -1325,6 +1345,12 @@
         toast.parentNode.removeChild(toast);
       }
     }, timeout || 2200);
+  }
+
+  function loadingState(label) {
+    return '<div class="status-box loading-state"><div class="loading-orbit"><i></i></div><p>' +
+      escapeHtml(label || "Loading") +
+      '</p><span class="loading-caption">Please wait</span></div>';
   }
 
   function startSyncProgress(label, total) {
@@ -2985,7 +3011,7 @@
   }
 
   function mediaControlIconSvg(name, solid) {
-    var cls = "icon-svg" + (solid ? " icon-solid" : "");
+    var cls = "icon-svg" + (name === "check" ? " icon-check" : "") + (solid ? " icon-solid" : "");
     if (name === "prev") {
       return (
         '<svg class="' +
@@ -3096,6 +3122,15 @@
         "</svg>"
       );
     }
+    if (name === "check") {
+      return (
+        '<svg class="' +
+        cls +
+        '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path d="M5 12.5l4.2 4.2L19 7"></path>' +
+        "</svg>"
+      );
+    }
     if (name === "film") {
       return (
         '<svg class="' +
@@ -3115,8 +3150,15 @@
     if (!dom.overlayFavorite) {
       return;
     }
-    dom.overlayFavorite.innerHTML = mediaControlIconSvg("favorite", !!isOn);
-    dom.overlayFavorite.setAttribute("title", isOn ? "Favorite: on" : "Favorite");
+    dom.overlayFavorite.innerHTML = favoriteButtonContent(isOn);
+    dom.overlayFavorite.classList.toggle("favorite-remove", !!isOn);
+    dom.overlayFavorite.classList.toggle("favorite-add", !isOn);
+    dom.overlayFavorite.setAttribute("title", isOn ? "Remove from Favorite" : "Add to Favorite");
+  }
+
+  function favoriteButtonContent(isOn) {
+    return mediaControlIconSvg(isOn ? "check" : "plus", false) +
+      "<span>" + (isOn ? "Remove from Favorite" : "Add to Favorite") + "</span>";
   }
 
   function syncOverlayControlIcons() {
@@ -3702,11 +3744,12 @@
 
   function renderCategories(containerId, categories, activeId, onSelect) {
     var html = "";
+    var categoryKind = containerId === "live-categories" ? "live" : containerId === "movie-categories" ? "movies" : "series";
     Array.prototype.forEach.call(categories, function (category) {
       var catId = String(category.category_id);
       var count = category.stream_count || category.count || "…";
       html +=
-        '<button class="category-btn focusable' +
+        '<button class="category-btn category-kind-' + categoryKind + ' focusable' +
         (catId === String(activeId) ? " active" : "") +
         '" type="button" tabindex="0" data-category-id="' +
         escapeHtml(catId) +
@@ -3829,11 +3872,11 @@
       refreshIconSvg("icon-refresh-sm") +
       '</button></div><div id="live-list" class="pane-scroll"></div></div><div class="detail-pane live-detail-pane"><div id="live-detail"></div></div></div>';
     document.getElementById("live-categories").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading live categories");
     document.getElementById("live-list").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading live channels");
     document.getElementById("live-detail").innerHTML =
-      '<div class="detail-card"><h2>Live preview</h2><p class="muted">Loading....</p></div>';
+      '<div class="detail-card"><h2>Live preview</h2>' + loadingState("Loading preview") + '</div>';
     ensureCategories("live").then(function (categories) {
       var liveCategoryInput = document.getElementById("live-category-search");
       function renderLiveCategoriesOnly() {
@@ -3864,9 +3907,9 @@
               }
             );
             document.getElementById("live-list").innerHTML =
-              '<div class="status-box"><p>Loading....</p></div>';
+              loadingState("Loading live channels");
             document.getElementById("live-detail").innerHTML =
-              '<div class="detail-card"><h2>Live preview</h2><p class="muted">Loading....</p></div>';
+              '<div class="detail-card"><h2>Live preview</h2>' + loadingState("Loading preview") + '</div>';
             ensureItems("live", state.live.selectedCategoryId).then(function (items) {
               state.live.items = items;
               if (items.length) {
@@ -4110,14 +4153,14 @@
     }
     var record = state.inline.record;
     detail.innerHTML =
-      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" class="focusable" tabindex="0" autoplay playsinline webkit-playsinline></video><div id="inline-state" class="inline-video-empty"><p>Loading....</p></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
+      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" class="focusable" tabindex="0" autoplay playsinline webkit-playsinline></video><div id="inline-state" class="inline-video-empty"><div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
       mediaControlIconSvg("prev") +
       '</button><button id="inline-ov-full" class="btn primary icon-only focusable" type="button" tabindex="0" title="Fullscreen">' +
       mediaControlIconSvg("fullscreen") +
       '</button><button id="inline-ov-next" class="btn icon-only focusable" type="button" tabindex="0" title="Next channel">' +
       mediaControlIconSvg("next") +
-      '</button><button id="inline-ov-fav" class="btn icon-only focusable" type="button" tabindex="0" title="Favorite">' +
-      mediaControlIconSvg("favorite", isFavorite(record.uid)) +
+      '</button><button id="inline-ov-fav" class="btn favorite-control focusable" type="button" tabindex="0" title="Add to Favorite">' +
+      favoriteButtonContent(isFavorite(record.uid)) +
       '</button></div></div></div><div class="epg-panel"><h2>Program guide</h2><div id="live-epg">' +
       buildEpgHtml() +
       "</div></div>";
@@ -4130,8 +4173,15 @@
     document.getElementById("inline-ov-full").addEventListener("click", function () {
       toggleInlineFullscreen();
     });
-    document.getElementById("inline-ov-fav").addEventListener("click", function () {
+    var inlineFavorite = document.getElementById("inline-ov-fav");
+    inlineFavorite.classList.toggle("favorite-remove", isFavorite(record.uid));
+    inlineFavorite.classList.toggle("favorite-add", !isFavorite(record.uid));
+    inlineFavorite.addEventListener("click", function () {
       toggleFavorite(record, true);
+      var on = isFavorite(record.uid);
+      this.innerHTML = favoriteButtonContent(on);
+      this.classList.toggle("favorite-remove", on);
+      this.classList.toggle("favorite-add", !on);
     });
     attachInlineLivePlayer();
   }
@@ -4176,33 +4226,37 @@
     if (!video || !state.inline.record) {
       return;
     }
-    function handleInlineFullscreenExit() {
+    video.addEventListener("webkitbeginfullscreen", function () {
+      state.inline.fullscreen = true;
+    });
+    video.addEventListener("webkitendfullscreen", function () {
       state.inline.fullscreen = false;
       state.inline.ignoreBackUntil = Date.now() + 750;
       syncInlineFullscreenLayout();
       resetViewportScroll();
       restoreFocusToActiveLiveChannel();
-      // webOS can apply the native video viewport one frame after the event.
-      setTimeout(function () {
-        syncInlineFullscreenLayout();
-        resetViewportScroll();
-      }, 0);
+    });
+    function handleInlineVideoBack(event) {
+      var code = normalizedRemoteCode(event);
+      if (isBackRemoteCode(code) && isInlineNativeFullscreen(video)) {
+        exitInlineFullscreen(video);
+        event.preventDefault();
+        event.stopPropagation();
+      }
     }
-    video.addEventListener("webkitbeginfullscreen", function () {
-      state.inline.fullscreen = true;
-    });
-    video.addEventListener("webkitendfullscreen", function () {
-      handleInlineFullscreenExit();
-    });
+    video.addEventListener("keydown", handleInlineVideoBack, true);
+    video.addEventListener("keyup", handleInlineVideoBack, true);
     if (!state.inline.fullscreenDocumentListenerBound) {
       state.inline.fullscreenDocumentListenerBound = true;
-      var onInlineFullscreenChange = function () {
+      document.addEventListener("fullscreenchange", function () {
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          handleInlineFullscreenExit();
+          state.inline.fullscreen = false;
+          state.inline.ignoreBackUntil = Date.now() + 750;
+          syncInlineFullscreenLayout();
+          resetViewportScroll();
+          restoreFocusToActiveLiveChannel();
         }
-      };
-      document.addEventListener("fullscreenchange", onInlineFullscreenChange);
-      document.addEventListener("webkitfullscreenchange", onInlineFullscreenChange);
+      });
     }
     var candidates = livePlaybackCandidates(state.inline.record);
     var candidateIndex = 0;
@@ -4297,7 +4351,7 @@
       }
       if (stateBox) {
         stateBox.className = "inline-video-empty";
-        stateBox.innerHTML = "<p>Loading....</p>";
+        stateBox.innerHTML = '<div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span>';
       }
       state.inline.restartTimer = setTimeout(
         function () {
@@ -4336,7 +4390,7 @@
       if (!url) {
         if (stateBox) {
           stateBox.className = "inline-video-empty";
-          stateBox.innerHTML = "<p>Loading....</p>";
+          stateBox.innerHTML = '<div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span>';
         }
         return;
       }
@@ -4346,7 +4400,7 @@
       playToken = ++state.inline.playToken;
       if (stateBox) {
         stateBox.className = "inline-video-empty";
-        stateBox.innerHTML = "<p>Loading....</p>";
+        stateBox.innerHTML = '<div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span>';
       }
       try {
         video.setAttribute("playsinline", "");
@@ -4861,10 +4915,13 @@
     dom.workspace.innerHTML =
       '<div class="split-layout split-layout--wide"><div class="category-pane"><div class="section-toolbar"><div class="section-title">Movie Collections</div></div><div class="category-search-wrap"><input id="movie-category-search" class="category-search-input focusable" type="text" tabindex="0" placeholder="Search categories" /></div><div id="movie-categories" class="pane-scroll"></div></div><div id="movie-grid" class="grid-pane"></div></div>';
     document.getElementById("movie-categories").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading movie categories");
     document.getElementById("movie-grid").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading movies");
     ensureCategories("movies").then(function (categories) {
+      if (state.view !== "movies") {
+        return;
+      }
       var movieCategoryInput = document.getElementById("movie-category-search");
       function renderMovieCategoriesOnly() {
         var visibleCategories = filteredCategoriesForView("movies", categories);
@@ -4919,6 +4976,9 @@
       }
       renderMovieCategoriesOnly();
       ensureItems("movies", state.movies.selectedCategoryId).then(function (items) {
+        if (state.view !== "movies") {
+          return;
+        }
         state.movies.items = items;
         var filteredItems = filtered(items, "movies");
         state.movies.rendered = Math.min(PAGE_GRID, filteredItems.length);
@@ -4977,14 +5037,11 @@
           if (record) {
             state.movies.selectedUid = record.uid;
             btn.classList.add("is-opening");
-            setTimeout(function () {
-              if (!document.body.contains(btn)) return;
-              openMovieDetails(
-                record,
-                filteredItems,
-                indexByUid(filteredItems, record.uid, "movies")
-              );
-            }, 0);
+            openMovieDetails(
+              record,
+              filteredItems,
+              indexByUid(filteredItems, record.uid, "movies")
+            );
           }
         });
       }
@@ -5022,13 +5079,17 @@
       renderSeriesEpisodesPage();
       return;
     }
+    dom.workspace.className = "";
     dom.workspace.innerHTML =
       '<div class="split-layout split-layout--wide"><div class="category-pane"><div class="section-toolbar"><div class="section-title">Series Collections</div></div><div class="category-search-wrap"><input id="series-category-search" class="category-search-input focusable" type="text" tabindex="0" placeholder="Search categories" /></div><div id="series-categories" class="pane-scroll"></div></div><div id="series-grid" class="grid-pane"></div></div>';
     document.getElementById("series-categories").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading series categories");
     document.getElementById("series-grid").innerHTML =
-      '<div class="status-box"><p>Loading....</p></div>';
+      loadingState("Loading series");
     ensureCategories("series").then(function (categories) {
+      if (state.view !== "series") {
+        return;
+      }
       var seriesCategoryInput = document.getElementById("series-category-search");
       function renderSeriesCategoriesOnly() {
         var visibleCategories = filteredCategoriesForView("series", categories);
@@ -5083,6 +5144,9 @@
       }
       renderSeriesCategoriesOnly();
       ensureItems("series", state.series.selectedCategoryId).then(function (items) {
+        if (state.view !== "series") {
+          return;
+        }
         state.series.items = items;
         var filteredItems = filtered(items, "series");
         var restoreIndex = state.series.restoreUid
@@ -5237,7 +5301,7 @@
       pane.innerHTML =
         '<div class="detail-card"><h2>' +
         escapeHtml(record.title) +
-        '</h2><p class="muted">Loading episodes…</p></div>';
+        '</h2>' + loadingState("Loading episodes") + '</div>';
       return;
     }
     var html =
@@ -5254,7 +5318,7 @@
       '</div></div></div><p class="muted" style="margin-top:16px;line-height:1.5;">' +
       escapeHtml(record.raw.plot || record.raw.description || "Series overview.") +
       '</p><div class="detail-actions" style="margin-top:18px;"><button id="series-fav" class="btn focusable" type="button" tabindex="0">' +
-      (isFavorite(record.uid) ? "Unfavorite" : "Favorite") +
+      (isFavorite(record.uid) ? "Remove from Favorite" : "Add to Favorite") +
       "</button></div></div>";
     var seasons = info.episodes || {};
     var keys = Object.keys(seasons);
@@ -5385,13 +5449,147 @@
       ext: episode.container_extension || "mp4"
     });
     record.seriesTitle = series.title;
+    record.seriesTmdbId = (series.raw && (series.raw.tmdb_id || series.raw.tmdb)) || "";
+    record.seriesImdbId = (series.raw && (series.raw.imdb_id || series.raw.imdb)) || "";
+    record.seasonNumber = seasonKey;
+    record.episodeNumber = episodeNumber;
     record.playbackTitle = title;
     return record;
   }
 
   function episodeArtworkUrl(episode, fallback) {
     var info = (episode && (episode.info || episode.episode_info)) || {};
-    return info.movie_image || info.cover_big || info.cover || episode.movie_image || episode.cover_big || fallback || "";
+    return info.tmdb_still_path || episode.tmdb_still_path || info.movie_image || info.cover_big || info.cover || episode.movie_image || episode.cover_big || fallback || "";
+  }
+
+  function tmdbApiKey() {
+    return trim(state.settings.tmdbApiKey || "");
+  }
+
+  function tmdbImageUrl(path, size) {
+    var value = trim(String(path || ""));
+    if (!value) return "";
+    if (/^https?:\/\//i.test(value)) return value;
+    return "https://image.tmdb.org/t/p/" + (size || "w185") + (value.charAt(0) === "/" ? value : "/" + value);
+  }
+
+  function tmdbRequest(path, params) {
+    var query = "?api_key=" + encodeURIComponent(tmdbApiKey());
+    var key;
+    for (key in params || {}) {
+      if (Object.prototype.hasOwnProperty.call(params, key) && params[key] !== "" && params[key] != null) {
+        query += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+      }
+    }
+    return fetchJSON("https://api.themoviedb.org/3" + path + query);
+  }
+
+  function tmdbCastList(details) {
+    var aggregate = details && details.aggregate_credits && details.aggregate_credits.cast || [];
+    var latest = details && details.credits && details.credits.cast || [];
+    var result = [];
+    var names = {};
+    function addCast(person) {
+      if (person && person.name) {
+        var name = String(person.name);
+        if (names[name.toLowerCase()]) return;
+        names[name.toLowerCase()] = true;
+        if (result.length >= 10) return;
+        result.push({
+          name: name,
+          character: person.roles && person.roles.length ? person.roles[0].character : person.character,
+          profile_path: tmdbImageUrl(person.profile_path, "w185")
+        });
+      }
+    }
+    Array.prototype.forEach.call(aggregate, addCast);
+    Array.prototype.forEach.call(latest, addCast);
+    return result;
+  }
+
+  function requestTmdbSeriesEnrichment(record, info) {
+    var key = tmdbApiKey();
+    var raw = record && record.raw || {};
+    var details = info && info.tmdbDetails;
+    var id = parseInt(raw.tmdb_id || raw.tmdb || (info.info && (info.info.tmdb_id || info.info.tmdb)), 10);
+    if (!key || !info || info.tmdbLoading || info.tmdbDetails === false) return;
+    if (details) {
+      requestTmdbSeasonEnrichment(record, info, state.series.selectedSeason, details.id);
+      return;
+    }
+    info.tmdbLoading = true;
+    function loadDetails(seriesId) {
+      return tmdbRequest("/tv/" + seriesId, { language: "en-US", append_to_response: "credits,aggregate_credits" });
+    }
+    var request = id > 0
+      ? loadDetails(id)
+      : tmdbRequest("/search/tv", { language: "en-US", query: cleanLookupTitle(record.title) }).then(function (data) {
+          var results = data && data.results || [];
+          return results.length ? loadDetails(results[0].id) : null;
+        });
+    request.then(function (data) {
+      info.tmdbLoading = false;
+      if (!data || !data.id) {
+        info.tmdbDetails = false;
+        return;
+      }
+      info.tmdbDetails = data;
+      renderSeriesEpisodesPage();
+    }, function () {
+      info.tmdbLoading = false;
+      info.tmdbDetails = false;
+    });
+  }
+
+  function requestTmdbSeasonEnrichment(record, info, seasonKey, tmdbId) {
+    var seasonNumber = parseInt(seasonKey, 10);
+    if (!tmdbId || isNaN(seasonNumber) || !info || !info.tmdbSeasons) {
+      if (info && !info.tmdbSeasons) info.tmdbSeasons = {};
+    }
+    if (!tmdbId || isNaN(seasonNumber) || info.tmdbSeasons[seasonKey] || info.tmdbSeasonLoading === seasonKey) return;
+    info.tmdbSeasonLoading = seasonKey;
+    tmdbRequest("/tv/" + tmdbId + "/season/" + seasonNumber, { language: "en-US" }).then(function (data) {
+      var map = {};
+      Array.prototype.forEach.call(data && data.episodes || [], function (episode) {
+        if (episode && episode.episode_number != null && episode.still_path) map[String(episode.episode_number)] = tmdbImageUrl(episode.still_path, "w300");
+      });
+      info.tmdbSeasons[seasonKey] = map;
+      info.tmdbSeasonLoading = "";
+      renderSeriesEpisodesPage();
+    }, function () {
+      info.tmdbSeasonLoading = "";
+    });
+  }
+
+  function requestTmdbMovieEnrichment(record, info) {
+    var key = tmdbApiKey();
+    var raw = record && record.raw || {};
+    var details = info && info.tmdbDetails;
+    var id = parseInt(raw.tmdb_id || raw.tmdb || (info && (info.tmdb_id || info.tmdb)), 10);
+    if (!key || !info || info.tmdbLoading || info.tmdbDetails === false) return;
+    if (details) return;
+    info.tmdbLoading = true;
+    function loadDetails(movieId) {
+      return tmdbRequest("/movie/" + movieId, { language: "en-US", append_to_response: "credits" });
+    }
+    var request = id > 0
+      ? loadDetails(id)
+      : tmdbRequest("/search/movie", { language: "en-US", query: cleanLookupTitle(record.title) }).then(function (data) {
+          var results = data && data.results || [];
+          return results.length ? loadDetails(results[0].id) : null;
+        });
+    request.then(function (data) {
+      info.tmdbLoading = false;
+      if (!data || !data.id) {
+        info.tmdbDetails = false;
+        return;
+      }
+      info.tmdbDetails = data;
+      renderMovieDetails(record, info, state.movieDetail.list, state.movieDetail.index);
+    }, function () {
+      info.tmdbLoading = false;
+      info.tmdbDetails = false;
+    });
   }
 
   function episodeDurationText(episode) {
@@ -5437,6 +5635,7 @@
     var record = state.recordsByUid[state.series.selectedUid];
     var cache = activeSourceCache();
     var info = record && cache ? cache.seriesInfo[record.seriesId] : null;
+    dom.workspace.className = "workspace-series-detail";
     if (!record) {
       state.series.selectedUid = null;
       renderSeries();
@@ -5455,7 +5654,9 @@
     var seriesSeasonCount = seriesSeasonKeys(seriesSeasons).length;
     var seriesEpisodeCount = 0;
     var seriesDuration = seriesTotalDurationText(seriesSeasons, seriesData);
-    var castValue = movieInfoValue(record, seriesData, ["cast", "actors"], "");
+    var tmdbDetails = info && info.tmdbDetails && info.tmdbDetails !== false ? info.tmdbDetails : null;
+    var tmdbCast = tmdbCastList(tmdbDetails);
+    var castValue = tmdbCast.length ? tmdbCast : movieInfoValue(record, seriesData, ["cast", "actors"], "");
     var actors = movieActorNames(castValue, 4);
     var director = movieInfoValue(record, seriesData, ["director", "directed_by"], "");
     var producerValue = movieInfoValue(record, seriesData, ["producer", "producers", "created_by", "executive_producer"], "");
@@ -5463,7 +5664,7 @@
       ? movieActorNames(producerValue, 4)
       : trim(String(producerValue || ""));
     var releaseDate = formatMovieReleaseDate(movieInfoValue(record, seriesData, ["first_air_date", "first_aired", "air_date", "releasedate", "release_date", "year"], ""));
-    var favorite = isFavorite(record.uid);
+    var seriesFavorite = isFavorite(record.uid);
     var existingShell = document.querySelector(".series-detail-shell");
     var detailShellMounted = !!(
       existingShell &&
@@ -5508,9 +5709,9 @@
         (director ? '<div class="mv-meta-item"><span>Director</span><b>' + escapeHtml(director) + '</b></div>' : "") +
         (producer ? '<div class="mv-meta-item"><span>Producer</span><b>' + escapeHtml(producer) + '</b></div>' : "") +
         (releaseDate !== "Not available" ? '<div class="mv-meta-item"><span>Initial release</span><b>' + escapeHtml(releaseDate) + '</b></div>' : "") +
-        '</div><div class="mv-actions series-detail-actions"><button id="series-detail-favorite" class="mv-btn mv-btn-dim focusable" type="button" tabindex="0">' +
-        mediaControlIconSvg(favorite ? "favorite" : "plus", favorite) +
-        '<span>' + (favorite ? "In favorites" : "Add to favorites") + '</span></button></div><div class="movie-detail-cast series-detail-cast">' +
+        '</div><div class="mv-actions"><button id="series-detail-favorite" class="mv-btn mv-btn-dim favorite-control ' + (seriesFavorite ? "favorite-remove" : "favorite-add") + ' focusable" type="button" tabindex="0">' +
+        favoriteButtonContent(seriesFavorite) +
+          '</button></div><div class="movie-detail-cast series-detail-cast">' +
         (castValue ? '<h2>Cast</h2><div class="movie-cast-row">' + movieCastHtml(castValue) + '</div>' : "") +
         '</div><div id="series-page-content"></div></div></div></div></div>';
       document.getElementById("series-detail-back").addEventListener("click", function () {
@@ -5520,13 +5721,14 @@
         toggleFavorite(record, true);
         var on = isFavorite(record.uid);
         this.innerHTML =
-          mediaControlIconSvg(on ? "favorite" : "plus", on) +
-          "<span>" + (on ? "In favorites" : "Add to favorites") + "</span>";
+          favoriteButtonContent(on);
+        this.classList.toggle("favorite-remove", on);
+        this.classList.toggle("favorite-add", !on);
       });
     }
     if (!info) {
       document.getElementById("series-page-content").innerHTML =
-        '<div class="status-box"><p>Loading episodes…</p></div>';
+        loadingState("Loading episodes");
       loadSeriesEpisodes();
       return;
     }
@@ -5558,16 +5760,25 @@
         escapeHtml(seasonHeading(info, selectedSeason, selectedEpisodes, record.title)) +
         '</h2><div class="series-episode-list">';
       Array.prototype.forEach.call(selectedEpisodes, function (episode, index) {
+        var episodeRecord = episodeRecords[index];
         var episodeNumber = episode.episode_num || episode.episode_number || index + 1;
         var title = cleanEpisodePlaybackTitle(record.title, episode.title || episode.name, episodeLabel(episode));
         var description = episode.plot || (episode.info && (episode.info.plot || episode.info.description)) || "No episode description is available.";
-        var artwork = episodeArtworkUrl(episode, record.poster);
+        var tmdbSeason = info.tmdbSeasons && info.tmdbSeasons[selectedSeason];
+        var tmdbStill = tmdbSeason && tmdbSeason[String(episodeNumber)];
+        var artwork = tmdbStill || episodeArtworkUrl(episode, record.poster);
         var duration = episodeDurationText(episode);
         var episodeReleaseDate = seriesEpisodeReleaseDate(episode);
-        html += '<button class="series-episode focusable" type="button" tabindex="0" data-series-episode-index="' + index + '"><span class="series-episode-number">' +
+        var resume = state.positions[episodeRecord.uid];
+        var hasResume = !!(resume && resume.currentTime > 10 && resume.duration > 120 && resume.currentTime < resume.duration - 20);
+        var progress = hasResume ? Math.max(0, Math.min(100, (resume.currentTime / resume.duration) * 100)) : 0;
+        var watched = !!state.watchedEpisodes[episodeRecord.uid];
+        html += '<button class="series-episode focusable' + (watched ? ' watched' : '') + '" type="button" tabindex="0" data-series-episode-index="' + index + '" data-record-uid="' + encodeAttr(episodeRecord.uid) + '"><span class="series-episode-number">' +
           escapeHtml(String(episodeNumber)) +
           '</span><span class="series-episode-artwork">' +
-          (artwork ? '<img src="' + encodeAttr(safeImgUrl(artwork)) + '" referrerpolicy="no-referrer" onerror="imgFallback(this)" />' : "") +
+          (artwork ? '<img class="series-episode-artwork-backdrop" src="' + encodeAttr(safeImgUrl(artwork)) + '" referrerpolicy="no-referrer" aria-hidden="true" onerror="this.style.display=\'none\'" /><img src="' + encodeAttr(safeImgUrl(artwork)) + '" referrerpolicy="no-referrer" onerror="imgFallback(this)" />' : "") +
+          (watched ? '<span class="series-episode-watched">Watched</span>' : '') +
+          (hasResume ? '<span class="series-episode-progress"><b style="width:' + progress + '%"></b></span>' : '') +
           '</span><span class="series-episode-copy"><b>' + escapeHtml(title) + '</b>' +
           (episodeReleaseDate ? '<small class="series-episode-release mv-chip mv-chip-release">Release date: ' + escapeHtml(episodeReleaseDate) + '</small>' : '') +
           '<small>' +
@@ -5591,12 +5802,15 @@
         var episodeIndex = parseInt(button.getAttribute("data-series-episode-index"), 10);
         var episodeRecord = episodeRecords[episodeIndex];
         if (episodeRecord) {
-          openOverlayPlayer(episodeRecord, episodeRecords, episodeIndex, false);
+          var resume = state.positions[episodeRecord.uid];
+          var hasResume = !!(resume && resume.currentTime > 10 && resume.duration > 120 && resume.currentTime < resume.duration - 20);
+          openOverlayPlayer(episodeRecord, episodeRecords, episodeIndex, hasResume);
         }
       });
     });
     hydrateMovieCastPhotos(document.querySelector(".series-detail-shell"));
     focusFirst(".series-episode");
+    requestTmdbSeriesEnrichment(record, info);
   }
 
   function renderCollection(title, records) {
@@ -5724,7 +5938,10 @@
       '" /></div></div>' +
       '<div class="detail-card" style="margin-top:14px;"><h2>Ratings</h2><p class="muted">Movie and series scores come from IMDb via OMDb. Get a free key at <b>omdbapi.com</b> &rarr; API Key. Without your own key the shared demo key is used, which is rate limited and often returns nothing.</p><div class="detail-actions" style="margin-top:12px;"><label class="settings-input-label">OMDb API Key</label><input id="settings-omdb-api-key" class="settings-text-input focusable" type="text" tabindex="0" placeholder="Paste your API key here" value="' +
       escapeHtml(state.settings.omdbApiKey || "") +
-      '" /></div><div class="detail-actions" style="margin-top:12px;"><button id="settings-clear-ratings" class="btn focusable" type="button" tabindex="0">Clear cached ratings</button></div></div></div>';
+      '" /></div><div class="detail-actions" style="margin-top:12px;"><button id="settings-clear-ratings" class="btn focusable" type="button" tabindex="0">Clear cached ratings</button></div></div>' +
+      '<div class="detail-card" style="margin-top:14px;"><h2>TMDB metadata</h2><p class="muted">Optional Series metadata from TMDB, including full cast, profile photos and episode artwork. Get a free API key at <b>themoviedb.org</b> &rarr; Settings &rarr; API.</p><div class="detail-actions" style="margin-top:12px;"><label class="settings-input-label">TMDB API Key</label><input id="settings-tmdb-api-key" class="settings-text-input focusable" type="text" tabindex="0" placeholder="Paste your TMDB API key here" value="' +
+      escapeHtml(state.settings.tmdbApiKey || "") +
+      '" /></div></div></div>';
     dom.workspace.innerHTML = html;
     var sourceHtml = "";
     Array.prototype.forEach.call(state.sources, function (source) {
@@ -5849,6 +6066,19 @@
       omdbKeyInput.addEventListener("change", saveOmdbKey);
       omdbKeyInput.addEventListener("blur", saveOmdbKey);
     }
+    var tmdbKeyInput = document.getElementById("settings-tmdb-api-key");
+    if (tmdbKeyInput) {
+      var saveTmdbKey = function () {
+        var next = tmdbKeyInput.value.trim();
+        if (next === state.settings.tmdbApiKey) {
+          return;
+        }
+        state.settings.tmdbApiKey = next;
+        saveSettings();
+      };
+      tmdbKeyInput.addEventListener("change", saveTmdbKey);
+      tmdbKeyInput.addEventListener("blur", saveTmdbKey);
+    }
     var clearRatingsBtn = document.getElementById("settings-clear-ratings");
     if (clearRatingsBtn) {
       clearRatingsBtn.addEventListener("click", function () {
@@ -5903,7 +6133,11 @@
       // Re-rendering here would tear down the running player and blank the pane
       var inlineFav = document.getElementById("inline-ov-fav");
       if (inlineFav && state.inline.record && state.inline.record.uid === record.uid) {
-        inlineFav.innerHTML = mediaControlIconSvg("favorite", isFavorite(record.uid));
+        var inlineOn = isFavorite(record.uid);
+        inlineFav.innerHTML = favoriteButtonContent(inlineOn);
+        inlineFav.classList.toggle("favorite-remove", inlineOn);
+        inlineFav.classList.toggle("favorite-add", !inlineOn);
+        inlineFav.setAttribute("title", inlineOn ? "Remove from Favorite" : "Add to Favorite");
       }
       return;
     }
@@ -6034,7 +6268,7 @@
       return text;
     }
     var hours = Math.floor(mins / 60);
-    return (hours ? hours + "h " : "") + (mins % 60) + "min";
+    return (hours ? hours + "h " : "") + (mins % 60) + " min";
   }
 
   function durationMinutesFromInfo(info) {
@@ -6160,12 +6394,17 @@
       list = String(list || "").split(",");
     }
     var html = "";
+    var names = {};
+    var castCount = 0;
     var i;
-    for (i = 0; i < list.length && i < 12; i += 1) {
+    for (i = 0; i < list.length && castCount < 10; i += 1) {
       var actor = list[i];
       var name = typeof actor === "object" ? actor.name || actor.character || "" : trim(actor);
       var image = typeof actor === "object" ? castImageUrl(actor.profile_path || actor.profile || actor.image || actor.photo || actor.avatar || actor.image_url) : "";
       if (!name) continue;
+      if (names[name.toLowerCase()]) continue;
+      names[name.toLowerCase()] = true;
+      castCount += 1;
       html +=
         '<div class="movie-cast-person">' +
         '<div class="movie-cast-photo" data-cast-name="' + encodeAttr(name) + '">' +
@@ -6181,7 +6420,7 @@
   function hydrateMovieCastPhotos(modal) {
     var nodes = modal ? modal.querySelectorAll(".movie-cast-photo[data-cast-name]") : [];
     var index = 0;
-    var limit = Math.min(8, nodes.length);
+    var limit = Math.min(30, nodes.length);
 
     function detailIsOpen() {
       return !!(
@@ -6935,7 +7174,8 @@
     var summary = movieInfoValue(record, info, ["plot", "description", "overview"], "No summary is available for this movie.");
     var poster = movieInfoValue(record, info, ["movie_image", "cover_big", "cover", "stream_icon"], record.poster);
     var backdrop = movieBackdropUrl(record, info);
-    var castValue = movieInfoValue(record, info, ["cast", "actors"], "");
+    var tmdbCast = tmdbCastList(info && info.tmdbDetails);
+    var castValue = tmdbCast.length ? tmdbCast : movieInfoValue(record, info, ["cast", "actors"], "");
     var actors = movieActorNames(castValue, 4);
     var rating = ratingValueFromItem(info || record.raw || {}) || ratingValueFromItem(record.raw || {});
     var ratingText = rating > 0 ? rating.toFixed(1) + " / 10" : "Not rated";
@@ -7020,9 +7260,9 @@
           mediaControlIconSvg("rew") +
           "<span>Play from Beginning</span></button>"
         : "") +
-      '<button id="movie-detail-favorite" class="mv-btn mv-btn-dim focusable" type="button" tabindex="0">' +
-      mediaControlIconSvg(favorite ? "favorite" : "plus", favorite) +
-      "<span>" + (favorite ? "In favorites" : "Add to favorites") + "</span></button>" +
+      '<button id="movie-detail-favorite" class="mv-btn mv-btn-dim favorite-control ' + (favorite ? "favorite-remove" : "favorite-add") + ' focusable" type="button" tabindex="0">' +
+      favoriteButtonContent(favorite) +
+      "</button>" +
       (trailer
         ? '<button id="movie-detail-trailer" class="mv-btn mv-btn-accent focusable" type="button" tabindex="0">' +
           mediaControlIconSvg("film") +
@@ -7054,14 +7294,38 @@
       toggleFavorite(record, true);
       var on = isFavorite(record.uid);
       this.innerHTML =
-        mediaControlIconSvg(on ? "favorite" : "plus", on) +
-        "<span>" + (on ? "In favorites" : "Add to favorites") + "</span>";
+        favoriteButtonContent(on);
+      this.classList.toggle("favorite-remove", on);
+      this.classList.toggle("favorite-add", !on);
     });
     hydrateMovieCastPhotos(modal);
+    requestTmdbMovieEnrichment(record, info);
     setTimeout(function () {
       var play = document.getElementById("movie-detail-play");
       if (play) focusNode(play);
     }, 40);
+  }
+
+  function renderMovieDetailsLoading(record) {
+    var modal = document.getElementById("movie-detail-modal");
+    if (!modal) {
+      return;
+    }
+    var backdrop = movieBackdropUrl(record, record.raw || {});
+    modal.innerHTML =
+      '<div class="movie-detail-shell movie-detail-shell-loading">' +
+      '<div class="mv-hero">' +
+      (backdrop
+        ? '<img src="' + encodeAttr(backdrop) + '" referrerpolicy="no-referrer" onerror="imgFallback(this)" />'
+        : "") +
+      '<div class="mv-hero-fade"></div><div class="mv-hero-fade-left"></div>' +
+      '</div><div class="mv-body"><button id="movie-detail-loading-close" class="mv-back focusable" type="button" tabindex="0" title="Back">' +
+      mediaControlIconSvg("back") +
+      '</button><div class="movie-detail-loading-content">' +
+      '<div class="loading-orbit"><i></i></div><h1>' +
+      escapeHtml(record.title || "Movie") +
+      '</h1><p>Loading movie details</p><span class="loading-caption">Preparing cast, artwork and playback</span></div></div></div>';
+    document.getElementById("movie-detail-loading-close").addEventListener("click", closeMovieDetails);
   }
 
   function openMovieDetails(record, list, index) {
@@ -7076,8 +7340,13 @@
     state.movieDetail.record = record;
     state.movieDetail.list = list || null;
     state.movieDetail.index = index === undefined ? -1 : index;
-    renderMovieDetails(record, record.raw || {}, list, index);
+    renderMovieDetailsLoading(record);
     modal.classList.add("open");
+    setTimeout(function () {
+      if (state.movieDetail.open && state.movieDetail.record === record) {
+        renderMovieDetails(record, record.raw || {}, list, index);
+      }
+    }, 0);
     var source = activeSource();
     if (source && source.type === "xtream" && record.streamId) {
       fetchJSON(xtreamApi(source, "get_vod_info", "&vod_id=" + encodeURIComponent(record.streamId))).then(
@@ -7156,6 +7425,10 @@
       if (state.positions[record.uid]) {
         delete state.positions[record.uid];
         savePositions();
+      }
+      if (record.view === "episode" && currentTime >= duration - 20) {
+        state.watchedEpisodes[record.uid] = Date.now();
+        saveWatchedEpisodes();
       }
       return;
     }
@@ -7266,7 +7539,7 @@
         : record.title;
     dom.overlaySubtitle.textContent =
       record.subtitle || recordCategoryName(record) || record.sourceName || "Playback";
-    dom.overlayStatus.textContent = "Loading....";
+    dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
     setOverlayFavoriteButton(isFavorite(record.uid));
     dom.overlayRew.style.display = record.view === "live" ? "none" : "inline-block";
     dom.overlayFwd.style.display = record.view === "live" ? "none" : "inline-block";
@@ -7373,6 +7646,9 @@
         text: cleanText
       });
     });
+    cues.sort(function (left, right) {
+      return left.start - right.start;
+    });
     return cues;
   }
 
@@ -7411,6 +7687,32 @@
     button.setAttribute("title", enabled ? "Subtitles: ON" : "Subtitles: OFF");
   }
 
+  function subtitleFileFromResults(results, record) {
+    var bestFile = null;
+    var bestScore = -1;
+    var wantedTitle = String(record.seriesTitle || record.title || "").toLowerCase();
+    var wantedSeason = String(record.seasonNumber || "");
+    var wantedEpisode = String(record.episodeNumber || "");
+    Array.prototype.forEach.call(results || [], function (result) {
+      var attributes = (result && result.attributes) || {};
+      var files = attributes.files || [];
+      var feature = attributes.feature_details || {};
+      var resultTitle = String(feature.title || attributes.title || "").toLowerCase();
+      var score = 0;
+      if (wantedTitle && resultTitle && resultTitle === wantedTitle) score += 8;
+      if (record.view === "episode") {
+        if (String(attributes.season_number || feature.season_number || "") === wantedSeason) score += 4;
+        if (String(attributes.episode_number || feature.episode_number || "") === wantedEpisode) score += 4;
+      }
+      if (attributes.download_count) score += Math.min(2, Number(attributes.download_count) / 1000);
+      if (files.length && score > bestScore) {
+        bestScore = score;
+        bestFile = files[0].file_id;
+      }
+    });
+    return bestFile;
+  }
+
   function fetchMovieSubtitles(record) {
     var key = state.settings.osApiKey;
     if (!key) return;
@@ -7427,9 +7729,26 @@
     var title = record.title || raw.name || raw.movie_title || "";
     var year = yearFromItem(raw);
     var tmdbId = raw.tmdb_id || raw.tmdb || "";
+    var isEpisode = record.view === "episode";
     var searchUrl =
-      "https://api.opensubtitles.com/api/v1/subtitles?languages=en&type=movie&order_by=download_count";
-    if (tmdbId) {
+      "https://api.opensubtitles.com/api/v1/subtitles?languages=en&type=" +
+      (isEpisode ? "episode" : "movie") +
+      "&order_by=download_count";
+    if (isEpisode) {
+      searchUrl += "&query=" + encodeURIComponent(record.seriesTitle || title);
+      if (record.seasonNumber !== "" && record.seasonNumber != null) {
+        searchUrl += "&season_number=" + encodeURIComponent(String(record.seasonNumber));
+      }
+      if (record.episodeNumber !== "" && record.episodeNumber != null) {
+        searchUrl += "&episode_number=" + encodeURIComponent(String(record.episodeNumber));
+      }
+      if (record.seriesTmdbId) {
+        searchUrl += "&parent_tmdb_id=" + encodeURIComponent(String(record.seriesTmdbId));
+      }
+      if (record.seriesImdbId) {
+        searchUrl += "&parent_imdb_id=" + encodeURIComponent(String(record.seriesImdbId));
+      }
+    } else if (tmdbId) {
       searchUrl += "&tmdb_id=" + encodeURIComponent(String(tmdbId));
     } else {
       searchUrl += "&query=" + encodeURIComponent(title);
@@ -7438,14 +7757,7 @@
     xhrJSON("GET", searchUrl, headers, null)
       .then(function (data) {
         var results = (data && data.data) || [];
-        var fileId = null;
-        for (var i = 0; i < results.length; i++) {
-          var files = results[i].attributes && results[i].attributes.files;
-          if (files && files.length) {
-            fileId = files[0].file_id;
-            break;
-          }
-        }
+        var fileId = subtitleFileFromResults(results, record);
         if (!fileId) {
           sub.loading = false;
           sub.error = "No English subtitles found";
@@ -7522,37 +7834,74 @@
   function isInlineNativeFullscreen(video) {
     return !!(
       state.inline.fullscreen ||
-      (video && video.webkitDisplayingFullscreen) ||
-      document.fullscreenElement === video ||
-      document.webkitFullscreenElement === video
+      (video &&
+        (video.webkitDisplayingFullscreen ||
+          document.fullscreenElement === video ||
+          document.webkitFullscreenElement === video))
     );
+  }
+
+  function normalizedRemoteCode(event) {
+    var code = event.keyCode || event.which || 0;
+    var key = event.key || event.code || event.keyIdentifier || "";
+    if (code) {
+      return code;
+    }
+    if (key === "ArrowLeft") return 37;
+    if (key === "ArrowUp") return 38;
+    if (key === "ArrowRight") return 39;
+    if (key === "ArrowDown") return 40;
+    if (key === "Enter" || key === "OK") return 13;
+    if (key === "Backspace") return 8;
+    if (key === "Escape") return 27;
+    if (key === "GoBack" || key === "Back" || key === "BrowserBack") return 461;
+    return 0;
+  }
+
+  function isBackRemoteCode(code) {
+    return code === 461 || code === 10009 || code === 27 || code === 8;
   }
 
   function toggleInlineFullscreen() {
     var video = document.getElementById("inline-video");
-    var doc = document;
     if (!video) {
       return;
     }
     if (isInlineNativeFullscreen(video)) {
-      state.inline.ignoreBackUntil = Date.now() + 1200;
-      if (video.webkitExitFullscreen) {
-        video.webkitExitFullscreen();
-      } else if (doc.exitFullscreen) {
-        doc.exitFullscreen();
-      } else if (doc.webkitExitFullscreen) {
-        doc.webkitExitFullscreen();
-      }
+      exitInlineFullscreen(video);
       return;
     }
     tryPlay(video);
     if (video.webkitEnterFullscreen) {
       video.webkitEnterFullscreen();
-    } else if (!window.PalmSystem && video.requestFullscreen) {
+    } else if (video.requestFullscreen) {
       video.requestFullscreen();
-    } else if (!window.PalmSystem && video.webkitRequestFullscreen) {
+    } else if (video.webkitRequestFullscreen) {
       video.webkitRequestFullscreen();
     }
+  }
+
+  function exitInlineFullscreen(video) {
+    var doc = document;
+    state.inline.fullscreen = false;
+    state.inline.ignoreBackUntil = Date.now() + 500;
+    try {
+      if (video.webkitExitFullscreen) {
+        video.webkitExitFullscreen();
+      } else if (video.webkitExitFullScreen) {
+        video.webkitExitFullScreen();
+      } else if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.webkitCancelFullScreen) {
+        doc.webkitCancelFullScreen();
+      }
+    } catch (e) {}
+    syncInlineFullscreenLayout();
+    setTimeout(function () {
+      restoreFocusToActiveLiveChannel();
+    }, 100);
   }
 
   function syncInlineFullscreenLayout() {
@@ -7618,7 +7967,7 @@
         reconnecting = false;
         return;
       }
-      dom.overlayStatus.textContent = "Loading....";
+      dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
       state.overlay.restartTimer = setTimeout(
         function () {
           reconnecting = false;
@@ -7654,7 +8003,7 @@
     function startOverlayPlayback() {
       var currentUrl = activeUrl();
       if (!currentUrl) {
-        dom.overlayStatus.textContent = "Loading....";
+        dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
         return;
       }
 
@@ -7667,7 +8016,7 @@
       } catch (e) {}
 
       video.volume = state.settings.volume;
-      dom.overlayStatus.textContent = "Loading....";
+      dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
 
       if (isHlsUrl(currentUrl) && canUseNativeHls(video)) {
         video.src = currentUrl;
@@ -7768,6 +8117,9 @@
         tryPlay(video);
         startOverlayTick();
         startOverlayWatchdog();
+      };
+      video.ontimeupdate = function () {
+        updateOverlayCaption(video.currentTime || 0);
       };
       // onstalled fires constantly during normal live buffering — do not reconnect on it
       video.onstalled = null;
@@ -7968,12 +8320,9 @@
           movieDetailModal.classList.add("open");
         }
         restoreFocusToMovieDetails();
-      } else if (
-        closingRecord.view === "episode" &&
-        state.view === "series" &&
-        state.series.selectedUid
-      ) {
-        focusFirst(".series-episode");
+      } else if (closingRecord.view === "episode" && state.view === "series" && state.series.selectedUid) {
+        renderSeriesEpisodesPage();
+        restoreFocusToOverlayRecord(closingRecord);
       } else {
         restoreFocusToOverlayRecord(closingRecord);
       }
@@ -8601,7 +8950,6 @@
         current.id === "movie-grid" ||
         current.id === "series-grid" ||
         current.id === "workspace" ||
-        current.classList.contains("series-detail-shell") ||
         current.classList.contains("pane-scroll") ||
         current.classList.contains("category-pane") ||
         current.classList.contains("list-pane") ||
@@ -8669,18 +9017,6 @@
       if (verticalHost) {
         applyScroll(verticalHost, nodeRect);
       }
-    }
-    if (host.classList && host.classList.contains("series-detail-shell")) {
-      // webOS can update focus before it updates the episode row geometry.
-      setTimeout(function () {
-        applyScroll(host, node.getBoundingClientRect());
-      }, 0);
-      setTimeout(function () {
-        applyScroll(host, node.getBoundingClientRect());
-      }, 80);
-      setTimeout(function () {
-        applyScroll(host, node.getBoundingClientRect());
-      }, 180);
     }
   }
 
@@ -9364,16 +9700,8 @@
   }
 
   function handleBack() {
-    var movieModal = document.getElementById("movie-detail-modal");
-    var seriesShell = document.querySelector(".series-detail-shell");
-    var backButton;
     if (trailerState.open) {
-      backButton = document.getElementById("trailer-close");
-      if (backButton && typeof backButton.click === "function") {
-        backButton.click();
-      } else {
-        closeTrailerPopup(true);
-      }
+      closeTrailerPopup(true);
       return true;
     }
     if (isInlineNativeFullscreen(document.getElementById("inline-video"))) {
@@ -9388,36 +9716,11 @@
       return true;
     }
     if (state.overlay.open) {
-      backButton = dom.overlayClose;
-      if (backButton && typeof backButton.click === "function") {
-        backButton.click();
-      } else {
-        closeOverlayPlayer();
-      }
+      closeOverlayPlayer();
       return true;
     }
-    if (
-      state.movieDetail.open ||
-      (movieModal && movieModal.classList.contains("open"))
-    ) {
-      backButton = document.getElementById("movie-detail-close");
-      if (backButton && typeof backButton.click === "function") {
-        backButton.click();
-      } else {
-        closeMovieDetails();
-      }
-      return true;
-    }
-    if (seriesShell || (state.view === "series" && state.series.selectedUid)) {
-      backButton = document.getElementById("series-detail-back");
-      if (backButton && typeof backButton.click === "function") {
-        backButton.click();
-      } else if (state.series.selectedUid) {
-        returnToSeriesGrid();
-      } else {
-        state.view = "home";
-        renderCurrentView();
-      }
+    if (state.movieDetail.open) {
+      closeMovieDetails();
       return true;
     }
     if (dom.sourceMenu.classList.contains("open")) {
@@ -9436,22 +9739,6 @@
       state.view = "home";
       renderCurrentView();
       return true;
-    }
-
-    // With disableBackHistoryAPI=true, webOS no longer performs the default
-    // history-based BACK action for us. At the app root, explicitly hand the
-    // BACK action back to the webOS launcher (webOS 3.x/older TVs).
-    if (
-      typeof window.webOS !== "undefined" &&
-      window.webOS &&
-      typeof window.webOS.platformBack === "function"
-    ) {
-      try {
-        window.webOS.platformBack();
-        return true;
-      } catch (e) {
-        // Fall through if the platform API is unavailable on this firmware.
-      }
     }
     return false;
   }
@@ -9636,7 +9923,6 @@
     if (oldMenu) {
       closeSeriesSeasonMenu(false);
     }
-    scrollNodeIntoHost(select);
     menu = document.createElement("div");
     menu.id = "series-season-menu";
     menu.className = "series-season-menu";
@@ -9662,10 +9948,13 @@
     document.body.appendChild(menu);
     rect = select.getBoundingClientRect();
     menu.style.left = Math.max(12, rect.left) + "px";
-    if (rect.bottom + 8 + menu.offsetHeight > window.innerHeight) {
-      menu.style.top = Math.max(12, rect.top - menu.offsetHeight - 8) + "px";
+    var menuHeight = menu.offsetHeight || 0;
+    var spaceAbove = rect.top - 12;
+    var spaceBelow = window.innerHeight - rect.bottom - 12;
+    if (spaceAbove >= menuHeight || spaceAbove > spaceBelow) {
+      menu.style.top = Math.max(12, rect.top - menuHeight - 8) + "px";
     } else {
-      menu.style.top = Math.max(12, rect.bottom + 8) + "px";
+      menu.style.top = Math.min(window.innerHeight - menuHeight - 12, rect.bottom + 8) + "px";
     }
     focusNode(menu.querySelector(".series-season-option.active") || menu.firstChild);
   }
@@ -9691,6 +9980,7 @@
         index = Math.max(0, Math.min(nodes.length - 1, index));
       }
       focusNode(nodes[index]);
+      scrollNodeIntoHost(nodes[index]);
       return true;
     }
     if (code === 13) {
@@ -9726,6 +10016,7 @@
     var index = Array.prototype.indexOf.call(nodes, document.activeElement);
     if (index < 0) {
       focusNode(nodes[0]);
+      scrollNodeIntoHost(nodes[0]);
       return true;
     }
     if (code === 37 || code === 38) {
@@ -9734,6 +10025,7 @@
       index = index === nodes.length - 1 ? 0 : index + 1;
     }
     focusNode(nodes[index]);
+    scrollNodeIntoHost(nodes[index]);
     return true;
   }
 
@@ -9806,7 +10098,10 @@
     }
     if (dom.workspace) {
       dom.workspace.addEventListener("scroll", function () {
-        if (dom.workspace.scrollTop || dom.workspace.scrollLeft) {
+        if (
+          !dom.workspace.classList.contains("workspace-series-detail") &&
+          (dom.workspace.scrollTop || dom.workspace.scrollLeft)
+        ) {
           dom.workspace.scrollTop = 0;
           dom.workspace.scrollLeft = 0;
         }
@@ -9973,12 +10268,8 @@
 
     function normalizedRemoteCode(event) {
       var code = event.keyCode || event.which || 0;
-      var key = event.key || "";
-      var keyIdentifier = event.keyIdentifier || "";
+      var key = event.key || event.code || event.keyIdentifier || "";
       if (code) {
-        if (code === 4) {
-          return 461;
-        }
         return code;
       }
       if (key === "ArrowLeft") {
@@ -9996,21 +10287,13 @@
       if (key === "Enter" || key === "OK") {
         return 13;
       }
-      if (key === "Backspace" || event.code === "Backspace" || keyIdentifier === "U+0008") {
+      if (key === "Backspace") {
         return 8;
       }
-      if (key === "Escape" || event.code === "Escape" || keyIdentifier === "U+001B") {
+      if (key === "Escape") {
         return 27;
       }
-      if (
-        key === "GoBack" ||
-        key === "Back" ||
-        key === "Return" ||
-        key === "Exit" ||
-        key === "BrowserBack" ||
-        key === "XF86Back" ||
-        event.code === "BrowserBack"
-      ) {
+      if (key === "GoBack" || key === "Back" || key === "BrowserBack") {
         return 461;
       }
       if (key === "ChannelUp") {
@@ -10020,6 +10303,10 @@
         return 34;
       }
       return 0;
+    }
+
+    function isBackRemoteCode(code) {
+      return code === 461 || code === 10009 || code === 27 || code === 8;
     }
 
     function ensureRemoteFocusAnchor(code) {
@@ -10153,16 +10440,9 @@
       if (!event) {
         return;
       }
-      if (event.__tvnRemoteHandled) {
-        return;
-      }
-      event.__tvnRemoteHandled = true;
       var code = normalizedRemoteCode(event);
       if (!code) {
         return;
-      }
-      if (code === 461 || code === 10009 || code === 27 || code === 8) {
-        backKeydownSeen = true;
       }
       // Do NOT use event.defaultPrevented — webOS spatial navigation sets it
       // for every arrow key, which would block all remote navigation.
@@ -10170,7 +10450,6 @@
       try {
         var activeTag = document.activeElement ? document.activeElement.tagName : "";
         var isInput = activeTag === "INPUT" || activeTag === "TEXTAREA";
-        var movieDetailModal = document.getElementById("movie-detail-modal");
         if (handleConfirmDialogKeys(code)) {
           event.preventDefault();
           return;
@@ -10179,7 +10458,7 @@
           event.preventDefault();
           return;
         }
-        if (code === 461 || code === 10009 || code === 27 || code === 8) {
+        if (isBackRemoteCode(code)) {
           // On webOS 3.x: BACK while a modal input is focused dismisses the
           // virtual keyboard instead of closing the modal.
           if (
@@ -10201,38 +10480,12 @@
                 }
               }
               if (btn) focusNode(btn);
+
             }, 80);
             return;
           }
-          if (code === 8 && state.overlay.open) {
-            closeOverlayPlayer();
-            event.preventDefault();
-            return;
-          }
-          if (
-            code === 8 &&
-            ((state.movieDetail.open) ||
-              (movieDetailModal && movieDetailModal.classList.contains("open")))
-          ) {
-            closeMovieDetails();
-            event.preventDefault();
-            return;
-          }
-          if (
-            code === 8 &&
-            (document.querySelector(".series-detail-shell") ||
-              (state.view === "series" && state.series.selectedUid))
-          ) {
-            if (state.series.selectedUid) {
-              returnToSeriesGrid();
-            } else {
-              state.view = "home";
-              renderCurrentView();
-            }
-            event.preventDefault();
-            return;
-          }
           if (handleBack()) {
+            lastBackHandledAt = Date.now();
             event.preventDefault();
           }
           return;
@@ -10397,57 +10650,27 @@
       }
     }
 
-    var backKeydownSeen = false;
+    // Native video controls on webOS can stop remote keys during bubbling.
+    // Capture them at the document so BACK always reaches the active view.
+    document.addEventListener("keydown", onRemoteKeydown, true);
 
-    // LG webOS 3.x: the physical Magic Remote BACK key is delivered as
-    // keyCode 461 (older firmware/remotes may use 10009 or 4).  Capture it
-    // at the window level before normal/bubble-phase handlers so the TV
-    // platform cannot consume the event before our navigation code sees it.
-    function onWebOSBackCapture(event) {
-      if (!event || event.__tvnRemoteHandled) {
-        return;
-      }
-      var rawCode = event.keyCode || event.which || 0;
-      if (rawCode !== 461 && rawCode !== 10009 && rawCode !== 4) {
-        return;
-      }
-
-      event.__tvnRemoteHandled = true;
-      backKeydownSeen = true;
-
-      try {
-        if (handleBack()) {
-          event.preventDefault();
-          if (typeof event.stopImmediatePropagation === "function") {
-            event.stopImmediatePropagation();
-          } else if (typeof event.stopPropagation === "function") {
-            event.stopPropagation();
-          }
-        }
-      } catch (e) {
-        // Keep the remote usable even if a view-specific back action fails.
-      }
-    }
-
-    window.addEventListener("keydown", onWebOSBackCapture, true);
-    document.addEventListener("keydown", onRemoteKeydown);
-    window.addEventListener("keydown", onRemoteKeydown);
-    function onBackKeyup(event) {
+    // Some webOS remotes report BACK only on keyup. Keep a short guard so a
+    // remote that reports both events still closes only one view per press.
+    var lastBackHandledAt = 0;
+    document.addEventListener("keyup", function (event) {
       var code = normalizedRemoteCode(event);
-      var isBack = code === 461 || code === 10009 || code === 27 || code === 8;
-      if (isBack && !backKeydownSeen) {
-        if (handleBack()) {
-          event.preventDefault();
-        }
+      if (!isBackRemoteCode(code)) {
+        return;
       }
-      backKeydownSeen = false;
-    }
-    window.addEventListener("keyup", onBackKeyup, true);
-    window.addEventListener("popstate", function (event) {
+      if (Date.now() - lastBackHandledAt < 500) {
+        event.preventDefault();
+        return;
+      }
       if (handleBack()) {
+        lastBackHandledAt = Date.now();
         event.preventDefault();
       }
-    });
+    }, true);
 
     // webOS 3.x fallback: some remotes fire keyup for OK when a button is focused.
     // If the keydown handler already processed OK we skip; otherwise fire click here.
@@ -10476,6 +10699,7 @@
   function init() {
     hud("init:1 applyClass");
     applyCardDensityClass();
+    applyDisplayScaleClass();
     applyThemeClass();
     hud("init:2 syncIcons");
     syncOverlayControlIcons();

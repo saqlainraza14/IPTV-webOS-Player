@@ -424,16 +424,15 @@
   function normalizedCode(event) {
     var code = event.keyCode || event.which || 0;
     var key = event.key || "";
-    var keyIdentifier = event.keyIdentifier || "";
     if (code) return code;
     if (key === "ArrowLeft") return 37;
     if (key === "ArrowUp") return 38;
     if (key === "ArrowRight") return 39;
     if (key === "ArrowDown") return 40;
     if (key === "Enter" || key === "OK") return 13;
-    if (key === "Backspace" || event.code === "Backspace" || keyIdentifier === "U+0008") return 8;
-    if (key === "Escape" || event.code === "Escape" || keyIdentifier === "U+001B") return 27;
-    if (key === "GoBack" || key === "Back" || key === "BrowserBack" || key === "XF86Back" || event.code === "BrowserBack") return 461;
+    if (key === "Backspace") return 8;
+    if (key === "Escape") return 27;
+    if (key === "GoBack" || key === "Back") return 461;
     return 0;
   }
 
@@ -444,7 +443,7 @@
     var code = normalizedCode(event);
     if (!code) return;
 
-    var isBack = code === 461 || code === 10009 || code === 27 || code === 8;
+    var isBack = code === 461 || code === 10009 || code === 27;
     var active = document.activeElement;
 
     // Only while the on-screen keyboard is open do keys belong to it.
