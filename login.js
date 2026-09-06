@@ -31,9 +31,25 @@
   }
 
   /* ── redirect if already logged in, unless Settings requested a new source ── */
-  var addingSource = /(?:\?|&)add=1(?:&|$)/.test(window.location.search || "");
-  var hasExistingSources = loadArray(KEY_SOURCES).length > 0;
-  if (hasExistingSources && !addingSource) {
+  var search = window.location.search || "";
+  var addingSource = /(?:\?|&)add=1(?:&|$)/.test(search);
+  var editMatch = search.match(/(?:\?|&)edit=([^&]+)/);
+  var editSourceId = editMatch ? decodeURIComponent(editMatch[1]) : "";
+  var savedSources = loadArray(KEY_SOURCES);
+  var hasExistingSources = savedSources.length > 0;
+  var editingSource = null;
+  var sourceIndex = -1;
+  var sourceIndexCandidate;
+  if (editSourceId) {
+    for (sourceIndexCandidate = 0; sourceIndexCandidate < savedSources.length; sourceIndexCandidate++) {
+      if (savedSources[sourceIndexCandidate].id === editSourceId) {
+        editingSource = savedSources[sourceIndexCandidate];
+        sourceIndex = sourceIndexCandidate;
+        break;
+      }
+    }
+  }
+  if (hasExistingSources && !addingSource && !editingSource) {
     window.location.replace("index.html");
     return;
   }
@@ -66,12 +82,18 @@
   var saveBtn = document.getElementById("lp-save");
   var cancelBtn = document.getElementById("lp-cancel");
 
+  if (editingSource) {
+    document.title = "TV Navigator - Edit Source";
+    document.querySelector(".lp-head h1").textContent = "Edit Source";
+    saveBtn.textContent = "Update Source";
+  }
+
   /* ── cancel is only possible when a working source already exists ── */
   function goToDashboard() {
     window.location.replace("index.html");
   }
 
-  if (hasExistingSources && cancelBtn) {
+  if ((hasExistingSources || editingSource) && cancelBtn) {
     cancelBtn.style.display = "";
     // tabindex is added here so the hidden button never joins remote navigation.
     cancelBtn.setAttribute("tabindex", "0");
@@ -105,6 +127,22 @@
     clearError();
   }
 
+  function fillSource(source) {
+    if (!source) return;
+    if (source.type === "xtream") {
+      setTab("xtream");
+      document.getElementById("lp-name").value = source.name || "";
+      document.getElementById("lp-server").value = source.server || "";
+      document.getElementById("lp-user").value = source.user || "";
+      document.getElementById("lp-pass").value = source.pass || "";
+    } else {
+      setTab("m3u");
+      document.getElementById("lp-m3u-name").value = source.name || "";
+      document.getElementById("lp-m3u-url").value = source.url || "";
+      document.getElementById("lp-m3u-ua").value = source.userAgent || "";
+    }
+  }
+
   tabXtream.addEventListener("click", function () {
     setTab("xtream");
     selectEl(tabXtream);
@@ -136,12 +174,12 @@
         throw new Error("Fill in the Xtream server, username and password.");
       }
       return {
-        id: makeId(),
+        id: editingSource ? editingSource.id : makeId(),
         type: "xtream",
         name: name,
         server: server,
         user: user,
-        pass: pass,
+        pass: pass
       };
     }
     var m3uName =
@@ -152,11 +190,11 @@
       throw new Error("Enter a remote M3U URL.");
     }
     return {
-      id: makeId(),
+      id: editingSource ? editingSource.id : makeId(),
       type: "m3u",
       name: m3uName,
       url: m3uUrl,
-      userAgent: ua,
+      userAgent: ua
     };
   }
 
@@ -228,11 +266,17 @@
   /* ── save and redirect ───────────────────────────────────── */
   function saveAndGo(src) {
     var sources = loadArray(KEY_SOURCES);
-    sources.push(src);
+    if (editingSource && sourceIndex >= 0 && sourceIndex < sources.length) {
+      sources[sourceIndex] = src;
+    } else {
+      sources.push(src);
+    }
     saveJson(KEY_SOURCES, sources);
-    try {
-      localStorage.setItem(KEY_ACTIVE_SOURCE, src.id);
-    } catch (e) {}
+    if (!editingSource) {
+      try {
+        localStorage.setItem(KEY_ACTIVE_SOURCE, src.id);
+      } catch (e) {}
+    }
     window.location.replace("index.html");
   }
 
@@ -278,6 +322,10 @@
   }
 
   saveBtn.addEventListener("click", onSave);
+
+  if (editingSource) {
+    fillSource(editingSource);
+  }
 
   /* ── webOS 3.x remote navigation ─────────────────────────
      Native-first: webOS TV has built-in spatial navigation, so arrow keys and
@@ -443,7 +491,7 @@
     var code = normalizedCode(event);
     if (!code) return;
 
-    var isBack = code === 461 || code === 10009 || code === 27;
+    var isBack = code === 461 || code === 10009 || code === 27 || code === 8;
     var active = document.activeElement;
 
     // Only while the on-screen keyboard is open do keys belong to it.
@@ -460,7 +508,7 @@
 
     if (isBack) {
       // Only leave the page when there is already a source to go back to.
-      if (hasExistingSources) goToDashboard();
+      if (hasExistingSources || editingSource) goToDashboard();
       return;
     }
 

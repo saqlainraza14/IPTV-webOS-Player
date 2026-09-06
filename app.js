@@ -134,7 +134,9 @@
       stallWatch: null,
       revealTimers: [],
       playToken: 0,
+      sessionToken: 0,
       lastTime: 0,
+      quality: "AUTO",
       fullscreen: false,
       ignoreBackUntil: 0,
       fullscreenDocumentListenerBound: false
@@ -340,7 +342,7 @@
       fastStartup: true,
       osApiKey: "Ai44IgjqwXW1Cku062F9pwbGm7dS2pMw",
       omdbApiKey: "ef4e2333",
-      tmdbApiKey: ""
+      tmdbApiKey: "56ac44dc39ea6561feda87853c1711ed"
     };
     var key;
     for (key in saved) {
@@ -1986,6 +1988,23 @@
   }
 
   function deleteSource(sourceId) {
+    var source = findSourceById(sourceId);
+    if (!source) {
+      return;
+    }
+    openConfirmDialog({
+      title: "Delete playlist?",
+      message: "Delete \"" + source.name + "\" and its saved source data?",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      returnFocusSelector: '.source-delete-btn[data-delete-source-id="' + sourceId + '"]',
+      onConfirm: function () {
+        performDeleteSource(sourceId);
+      }
+    });
+  }
+
+  function performDeleteSource(sourceId) {
     var next = [];
     Array.prototype.forEach.call(state.sources, function (entry) {
       if (entry.id !== sourceId) {
@@ -2646,15 +2665,15 @@
   }
 
   function renderCurrentView() {
+    if (state.view !== "live") {
+      state.inline.fullscreen = false;
+      syncInlineFullscreenLayout();
+      stopInlinePlayer();
+      state.inline.record = null;
+      state.inline.list = null;
+      state.inline.index = -1;
+    }
     if (renderedView !== state.view) {
-      if (renderedView === "live" && state.view !== "live") {
-        state.inline.fullscreen = false;
-        syncInlineFullscreenLayout();
-        stopInlinePlayer();
-        state.inline.record = null;
-        state.inline.list = null;
-        state.inline.index = -1;
-      }
       renderedView = state.view;
       if (state.view !== "home") {
         homeWorkToken += 1;
@@ -2704,7 +2723,9 @@
   function renderNoSource() {
     dom.workspace.innerHTML =
       '<div class="empty-state"><h2>No source selected</h2><p>Add an Xtream or M3U source to begin.</p><button id="empty-add" class="btn primary focusable" type="button" tabindex="0">Add source</button></div>';
-    document.getElementById("empty-add").addEventListener("click", openSourceModal);
+    document.getElementById("empty-add").addEventListener("click", function () {
+      window.location.replace("login.html?add=1");
+    });
     focusFirst("#empty-add");
   }
 
@@ -2728,13 +2749,25 @@
     );
   }
 
+  function belongsToActiveSource(record) {
+    var source = activeSource();
+    if (!source || !record) {
+      return false;
+    }
+    if (record.sourceId) {
+      return String(record.sourceId) === String(source.id);
+    }
+    return typeof record.uid === "string" && record.uid.indexOf(source.id + ":") === 0;
+  }
+
   function continueItems() {
     var list = [];
     var key;
     for (key in state.positions) {
       if (
         Object.prototype.hasOwnProperty.call(state.positions, key) &&
-        state.positions[key].record
+        state.positions[key].record &&
+        belongsToActiveSource(state.positions[key].record)
       ) {
         var record = clonePlain(state.positions[key].record);
         record._resume = state.positions[key];
@@ -2792,6 +2825,28 @@
           (subtitle ? '<div class="poster-meta">' + escapeHtml(subtitle) + "</div>" : "") +
           "</div></button>")
     );
+  }
+
+  function updateFavoriteIndicators(uid) {
+    var cards = document.querySelectorAll('[data-record-uid="' + uid + '"]');
+    var isOn = isFavorite(uid);
+    Array.prototype.forEach.call(cards, function (card) {
+      var poster = card.querySelector(".poster");
+      var badge = poster && poster.querySelector(".poster-badge--favorite");
+      if (poster && isOn && !badge) {
+        badge = document.createElement("span");
+        badge.className = "poster-badge poster-badge--favorite";
+        badge.textContent = "★";
+        poster.insertBefore(badge, poster.firstChild);
+      } else if (badge && !isOn) {
+        badge.parentNode.removeChild(badge);
+      }
+      var liveMarker = card.querySelector(".live-favorite-marker");
+      if (liveMarker) {
+        liveMarker.style.display = isOn ? "inline-block" : "none";
+        liveMarker.setAttribute("aria-label", isOn ? "Favorite" : "");
+      }
+    });
   }
 
   function bindRecordButtons(root) {
@@ -3638,7 +3693,7 @@
     var source = activeSource();
     ensureXtreamExpiry(source);
     var moviesSynced = isViewSynced("movies");
-    var recentList = state.history.slice(0, 10);
+    var recentList = state.history.filter(belongsToActiveSource).slice(0, 10);
     var continueList = continueItems().slice(0, 10);
     var recentAddedList = recentlyAddedMovies(12);
     var html = '<div class="home-wrap">';
@@ -4057,6 +4112,18 @@
           : "") +
         '</div><div class="card-main"><div class="card-title">' +
         escapeHtml(record.title) +
+        '<span class="live-favorite-marker" aria-label="Favorite"' +
+        (isFavorite(record.uid) ? "" : ' style="display:none;"') +
+        '>★</span>' +
+        '<span class="live-quality" data-live-quality-uid="' +
+        escapeHtml(record.uid) +
+        '">' +
+        escapeHtml(
+          state.inline.record && record.uid === state.inline.record.uid && state.inline.quality
+            ? state.inline.quality
+            : "AUTO"
+        ) +
+        "</span>" +
         '</div><div class="card-subtitle">' +
         escapeHtml(record.subtitle || "Live") +
         "</div></div></div></button>";
@@ -4097,6 +4164,7 @@
             }
             state.live.activeUid = record.uid;
             state.inline.record = record;
+            state.inline.quality = "AUTO";
             state.inline.list = items;
             state.inline.index = indexByUid(items, record.uid, "live");
             pushHistory(record);
@@ -4144,6 +4212,40 @@
     return items;
   }
 
+  function liveQualityLabel(height) {
+    height = parseInt(height, 10) || 0;
+    if (!height) return "AUTO";
+    if (height <= 288) return "240p";
+    if (height <= 576) return "480p";
+    if (height <= 720) return "720p HD";
+    if (height <= 1080) return "1080p";
+    if (height <= 1440) return "2K";
+    if (height <= 2160) return "4K";
+    return "8K";
+  }
+
+  function updateInlineLiveQuality(video, hls) {
+    var height = video && video.videoHeight;
+    var level;
+    var label;
+    if (hls && hls.currentLevel >= 0 && hls.levels) {
+      level = hls.levels[hls.currentLevel];
+      if (level && level.height) height = level.height;
+    }
+    label = liveQualityLabel(height);
+    state.inline.quality = label;
+    Array.prototype.forEach.call(document.querySelectorAll(".live-quality"), function (badge) {
+      if (
+        badge.getAttribute("data-live-quality-uid") ===
+        (state.inline.record && state.inline.record.uid)
+      ) {
+        badge.textContent = label;
+      }
+    });
+    var fullscreenQuality = document.getElementById("inline-live-quality");
+    if (fullscreenQuality) fullscreenQuality.textContent = label;
+  }
+
   function renderLiveDetail() {
     var detail = document.getElementById("live-detail");
     if (!state.inline.record) {
@@ -4153,7 +4255,7 @@
     }
     var record = state.inline.record;
     detail.innerHTML =
-      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" class="focusable" tabindex="0" autoplay playsinline webkit-playsinline></video><div id="inline-state" class="inline-video-empty"><div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
+      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" class="focusable" tabindex="0" autoplay playsinline webkit-playsinline></video><div class="inline-live-title"><strong id="inline-live-title"></strong><span id="inline-live-subtitle"></span><em id="inline-live-quality">AUTO</em></div><div id="inline-state" class="inline-video-empty"><div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
       mediaControlIconSvg("prev") +
       '</button><button id="inline-ov-full" class="btn primary icon-only focusable" type="button" tabindex="0" title="Fullscreen">' +
       mediaControlIconSvg("fullscreen") +
@@ -4221,6 +4323,7 @@
 
   function attachInlineLivePlayer() {
     stopInlinePlayer();
+    var sessionToken = state.inline.sessionToken;
     var video = document.getElementById("inline-video");
     var stateBox = document.getElementById("inline-state");
     if (!video || !state.inline.record) {
@@ -4262,6 +4365,10 @@
     var candidateIndex = 0;
     var reconnecting = false;
     var failCount = 0;
+
+    function isCurrentInlineSession() {
+      return state.inline.sessionToken === sessionToken && state.view === "live";
+    }
 
     function revealInlineVideo() {
       // Remove the overlay entirely from DOM so nothing sits over the video element.
@@ -4330,7 +4437,7 @@
     }
 
     function scheduleInlineReconnect(reason) {
-      if (reconnecting || !state.inline.record) {
+      if (reconnecting || !state.inline.record || !isCurrentInlineSession()) {
         return;
       }
       reconnecting = true;
@@ -4356,7 +4463,7 @@
       state.inline.restartTimer = setTimeout(
         function () {
           reconnecting = false;
-          if (state.inline.record && state.view === "live") {
+          if (state.inline.record && isCurrentInlineSession()) {
             startInlinePlayback();
           }
         },
@@ -4368,7 +4475,7 @@
       clearInlineRecovery();
       state.inline.lastTime = -1;
       state.inline.stallWatch = setInterval(function () {
-        if (!state.inline.record || state.view !== "live") {
+        if (!state.inline.record || !isCurrentInlineSession()) {
           clearInlineRecovery();
           return;
         }
@@ -4387,6 +4494,9 @@
     function startInlinePlayback() {
       var url = activeUrl();
       var playToken;
+      if (!isCurrentInlineSession()) {
+        return;
+      }
       if (!url) {
         if (stateBox) {
           stateBox.className = "inline-video-empty";
@@ -4423,7 +4533,8 @@
         var cdnLoader = createSslFallbackHlsLoader();
         var inlineHlsCfg = {
           enableWorker: false,
-          startLevel: -1,
+          startLevel: 0,
+          capLevelToPlayerSize: true,
           maxBufferLength: 30,
           maxMaxBufferLength: 60
         };
@@ -4437,6 +4548,10 @@
           revealInlineVideo();
           tryPlay(video);
           startInlineWatchdog();
+          updateInlineLiveQuality(video, state.inline.hls);
+        });
+        state.inline.hls.on(Hls.Events.LEVEL_SWITCHED, function () {
+          updateInlineLiveQuality(video, state.inline.hls);
         });
         state.inline.hls.on(Hls.Events.ERROR, function (evt, data) {
           if (!data) {
@@ -4513,6 +4628,13 @@
           revealInlineVideo();
         }
       };
+      video.addEventListener("loadedmetadata", function () {
+        updateInlineLiveQuality(video, state.inline.hls);
+      });
+      video.addEventListener("resize", function () {
+        updateInlineLiveQuality(video, state.inline.hls);
+      });
+      updateInlineLiveQuality(video, state.inline.hls);
 
       // onstalled fires constantly on webOS during normal buffering — do not reconnect on it
       video.onstalled = null;
@@ -4560,15 +4682,25 @@
   }
 
   function stopInlinePlayer() {
-    var video = document.getElementById("inline-video");
-    if (video) {
+    state.inline.sessionToken += 1;
+    var videos = document.querySelectorAll("#inline-video, .inline-video-wrap video");
+    Array.prototype.forEach.call(videos, function (video) {
       try {
+        if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
+          video.webkitExitFullscreen();
+        }
         video.pause();
         video.src = "";
         video.removeAttribute("src");
         video.load();
       } catch (e) {}
-    }
+    });
+    state.inline.fullscreen = false;
+    state.inline.ignoreBackUntil = Date.now() + 750;
+    document.body.classList.remove("inline-fullscreen-active");
+    Array.prototype.forEach.call(document.querySelectorAll(".inline-fullscreen"), function (node) {
+      node.classList.remove("inline-fullscreen");
+    });
     if (state.inline.hls) {
       try {
         state.inline.hls.destroy();
@@ -4790,10 +4922,12 @@
     } else {
       nextIndex = state.inline.index + step;
       if (nextIndex < 0) {
-        nextIndex = items.length - 1;
+        showToast("This is the first channel in this category", false, 1800);
+        return;
       }
       if (nextIndex >= items.length) {
-        nextIndex = 0;
+        showToast("This is the last channel in this category", false, 1800);
+        return;
       }
     }
     var nextItem = items[nextIndex];
@@ -4803,11 +4937,24 @@
     });
     state.live.activeUid = nextRecord.uid;
     state.inline.record = nextRecord;
+    state.inline.quality = "AUTO";
     state.inline.index = nextIndex;
     pushHistory(nextRecord);
+    if (state.inline.fullscreen) {
+      renderLiveList();
+      var fullscreenTitle = document.getElementById("inline-live-title");
+      var fullscreenSubtitle = document.getElementById("inline-live-subtitle");
+      if (fullscreenTitle) fullscreenTitle.textContent = nextRecord.title;
+      if (fullscreenSubtitle) {
+        fullscreenSubtitle.textContent =
+          nextRecord.subtitle || recordCategoryName(nextRecord) || "Live channel";
+      }
+      attachInlineLivePlayer();
+      loadLiveEpg(nextRecord);
+      return;
+    }
     renderLiveList();
     renderLiveDetail();
-    syncInlineFullscreenLayout();
     loadLiveEpg(nextRecord);
   }
 
@@ -5463,7 +5610,7 @@
   }
 
   function tmdbApiKey() {
-    return trim(state.settings.tmdbApiKey || "");
+    return trim(state.settings.tmdbApiKey || "") || "56ac44dc39ea6561feda87853c1711ed";
   }
 
   function tmdbImageUrl(path, size) {
@@ -5815,6 +5962,9 @@
 
   function renderCollection(title, records) {
     var list = records.filter(function (record) {
+      if (!belongsToActiveSource(record)) {
+        return false;
+      }
       var q = trim(state.searchQuery).toLowerCase();
       if (!q) {
         return true;
@@ -5852,7 +6002,7 @@
 
   function renderFavoritesSections() {
     var query = trim(state.searchQuery).toLowerCase();
-    var sourceRecords = state.favorites.slice(0, 20);
+    var sourceRecords = state.favorites.filter(belongsToActiveSource).slice(0, 20);
     var moviesList = [];
     var seriesList = [];
     var liveList = [];
@@ -5940,7 +6090,7 @@
       escapeHtml(state.settings.omdbApiKey || "") +
       '" /></div><div class="detail-actions" style="margin-top:12px;"><button id="settings-clear-ratings" class="btn focusable" type="button" tabindex="0">Clear cached ratings</button></div></div>' +
       '<div class="detail-card" style="margin-top:14px;"><h2>TMDB metadata</h2><p class="muted">Optional Series metadata from TMDB, including full cast, profile photos and episode artwork. Get a free API key at <b>themoviedb.org</b> &rarr; Settings &rarr; API.</p><div class="detail-actions" style="margin-top:12px;"><label class="settings-input-label">TMDB API Key</label><input id="settings-tmdb-api-key" class="settings-text-input focusable" type="text" tabindex="0" placeholder="Paste your TMDB API key here" value="' +
-      escapeHtml(state.settings.tmdbApiKey || "") +
+      escapeHtml(tmdbApiKey()) +
       '" /></div></div></div>';
     dom.workspace.innerHTML = html;
     var sourceHtml = "";
@@ -6069,7 +6219,8 @@
     var tmdbKeyInput = document.getElementById("settings-tmdb-api-key");
     if (tmdbKeyInput) {
       var saveTmdbKey = function () {
-        var next = tmdbKeyInput.value.trim();
+        var next = tmdbKeyInput.value.trim() || tmdbApiKey();
+        tmdbKeyInput.value = next;
         if (next === state.settings.tmdbApiKey) {
           return;
         }
@@ -6088,7 +6239,9 @@
     }
     Array.prototype.forEach.call(document.querySelectorAll(".source-edit-btn"), function (btn) {
       btn.addEventListener("click", function () {
-        openSourceModal(btn.getAttribute("data-edit-source-id"));
+        window.location.replace(
+          "login.html?edit=" + encodeURIComponent(btn.getAttribute("data-edit-source-id"))
+        );
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll(".source-delete-btn"), function (btn) {
@@ -6101,7 +6254,10 @@
   function isFavorite(uid) {
     var i;
     for (i = 0; i < state.favorites.length; i++) {
-      if (state.favorites[i].uid === uid) {
+      if (
+        state.favorites[i].uid === uid &&
+        belongsToActiveSource(state.favorites[i])
+      ) {
         return true;
       }
     }
@@ -6126,6 +6282,7 @@
     }
     state.favorites = next.slice(0, 20);
     saveFavorites();
+    updateFavoriteIndicators(record.uid);
     if (state.overlay.record && state.overlay.record.uid === record.uid) {
       setOverlayFavoriteButton(isFavorite(record.uid));
     }
@@ -7311,15 +7468,9 @@
     if (!modal) {
       return;
     }
-    var backdrop = movieBackdropUrl(record, record.raw || {});
     modal.innerHTML =
       '<div class="movie-detail-shell movie-detail-shell-loading">' +
-      '<div class="mv-hero">' +
-      (backdrop
-        ? '<img src="' + encodeAttr(backdrop) + '" referrerpolicy="no-referrer" onerror="imgFallback(this)" />'
-        : "") +
-      '<div class="mv-hero-fade"></div><div class="mv-hero-fade-left"></div>' +
-      '</div><div class="mv-body"><button id="movie-detail-loading-close" class="mv-back focusable" type="button" tabindex="0" title="Back">' +
+      '<div class="mv-body"><button id="movie-detail-loading-close" class="mv-back focusable" type="button" tabindex="0" title="Back">' +
       mediaControlIconSvg("back") +
       '</button><div class="movie-detail-loading-content">' +
       '<div class="loading-orbit"><i></i></div><h1>' +
@@ -7461,6 +7612,18 @@
       return;
     }
     var nextIndex = state.overlay.index + step;
+    if (state.overlay.record.view === "live") {
+      if (nextIndex < 0 || nextIndex >= state.overlay.list.length) {
+        showToast(
+          nextIndex < 0
+            ? "This is the first channel in this category"
+            : "This is the last channel in this category",
+          false,
+          1800
+        );
+        return;
+      }
+    }
     if (state.overlay.record.view === "episode") {
       if (nextIndex < 0 || nextIndex >= state.overlay.list.length) {
         showToast(nextIndex < 0 ? "This is the first episode of the season" : "This is the last episode of the season", false, 1800);
@@ -7872,32 +8035,46 @@
       return;
     }
     tryPlay(video);
-    if (video.webkitEnterFullscreen) {
-      video.webkitEnterFullscreen();
-    } else if (video.requestFullscreen) {
-      video.requestFullscreen();
-    } else if (video.webkitRequestFullscreen) {
-      video.webkitRequestFullscreen();
+    state.inline.fullscreen = true;
+    document.body.classList.add("inline-fullscreen-active");
+    var wrap = document.querySelector(".inline-video-wrap");
+    if (wrap) wrap.classList.add("inline-fullscreen");
+    showInlineFullscreenTitle();
+  }
+
+  function showInlineFullscreenTitle() {
+    var title = document.getElementById("inline-live-title");
+    var subtitle = document.getElementById("inline-live-subtitle");
+    if (title && state.inline.record) title.textContent = state.inline.record.title;
+    if (subtitle && state.inline.record) {
+      subtitle.textContent =
+        state.inline.record.subtitle || recordCategoryName(state.inline.record) || "Live channel";
     }
+    var quality = document.getElementById("inline-live-quality");
+    if (quality) quality.textContent = state.inline.quality || "AUTO";
   }
 
   function exitInlineFullscreen(video) {
     var doc = document;
+    var wrap = document.querySelector(".inline-video-wrap");
+    var customFullscreen = !!(wrap && wrap.classList.contains("inline-fullscreen"));
     state.inline.fullscreen = false;
     state.inline.ignoreBackUntil = Date.now() + 500;
-    try {
-      if (video.webkitExitFullscreen) {
-        video.webkitExitFullscreen();
-      } else if (video.webkitExitFullScreen) {
-        video.webkitExitFullScreen();
-      } else if (doc.exitFullscreen) {
-        doc.exitFullscreen();
-      } else if (doc.webkitExitFullscreen) {
-        doc.webkitExitFullscreen();
-      } else if (doc.webkitCancelFullScreen) {
-        doc.webkitCancelFullScreen();
-      }
-    } catch (e) {}
+    if (!customFullscreen) {
+      try {
+        if (video.webkitExitFullscreen) {
+          video.webkitExitFullscreen();
+        } else if (video.webkitExitFullScreen) {
+          video.webkitExitFullScreen();
+        } else if (doc.exitFullscreen) {
+          doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          doc.webkitExitFullscreen();
+        } else if (doc.webkitCancelFullScreen) {
+          doc.webkitCancelFullScreen();
+        }
+      } catch (e) {}
+    }
     syncInlineFullscreenLayout();
     setTimeout(function () {
       restoreFocusToActiveLiveChannel();
@@ -8016,6 +8193,7 @@
       } catch (e) {}
 
       video.volume = state.settings.volume;
+      video.setAttribute("preload", "auto");
       dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
 
       if (isHlsUrl(currentUrl) && canUseNativeHls(video)) {
@@ -8025,7 +8203,7 @@
         var cdnLoaderOv = createSslFallbackHlsLoader();
         var overlayHlsCfg = {
           enableWorker: false,
-          startLevel: -1,
+          startLevel: 0,
           capLevelToPlayerSize: true,
           maxBufferLength: 18,
           maxMaxBufferLength: 40
@@ -9594,8 +9772,24 @@
       return;
     }
     try {
+      if (state.view === "settings") {
+        Array.prototype.forEach.call(
+          document.querySelectorAll(".settings-remote-focus"),
+          function (focusedNode) {
+            focusedNode.classList.remove("settings-remote-focus");
+          }
+        );
+        node.classList.add("settings-remote-focus");
+      }
       safeFocus(node);
       scrollNodeIntoHost(node);
+      if (state.view === "settings") {
+        setTimeout(function () {
+          if (document.activeElement === node) {
+            scrollNodeIntoHost(node);
+          }
+        }, 0);
+      }
     } catch (e) {}
   }
 
@@ -9704,6 +9898,10 @@
       closeTrailerPopup(true);
       return true;
     }
+    if (state.overlay.open) {
+      closeOverlayPlayer();
+      return true;
+    }
     if (isInlineNativeFullscreen(document.getElementById("inline-video"))) {
       toggleInlineFullscreen();
       return true;
@@ -9713,10 +9911,6 @@
     }
     if (isConfirmDialogOpen()) {
       closeConfirmDialog(true);
-      return true;
-    }
-    if (state.overlay.open) {
-      closeOverlayPlayer();
       return true;
     }
     if (state.movieDetail.open) {
@@ -10607,6 +10801,34 @@
             event.preventDefault();
             return;
           }
+        }
+        if (
+          isInput &&
+          state.view === "settings" &&
+          (code === 37 || code === 38 || code === 39 || code === 40)
+        ) {
+          if (
+            !moveSettingsFocus(
+              code === 37 ? "left" : code === 38 ? "up" : code === 39 ? "right" : "down"
+            )
+          ) {
+            moveFocus(code === 37 ? "left" : code === 38 ? "up" : code === 39 ? "right" : "down");
+          }
+          event.preventDefault();
+          return;
+        }
+        if (isInput && state.view === "settings" && code === 13) {
+          var settingsNodes = settingsFocusableNodes();
+          var settingsIndex = Array.prototype.indexOf.call(settingsNodes, document.activeElement);
+          var nextSettingsNode = settingsNodes[settingsIndex + 1] || settingsNodes[0];
+          document.activeElement.blur();
+          if (nextSettingsNode) {
+            setTimeout(function () {
+              focusNode(nextSettingsNode);
+            }, 0);
+          }
+          event.preventDefault();
+          return;
         }
         if (isInput) {
           return;
