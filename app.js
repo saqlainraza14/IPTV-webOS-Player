@@ -94,7 +94,10 @@
     movies: {
       selectedUid: null,
       restoreUid: null,
-      rendered: 0
+      rendered: 0,
+      sort: "date_desc",
+      minRating: 0,
+      filterOpen: false
     },
     series: {
       selectedCategoryId: null,
@@ -102,7 +105,10 @@
       selectedUid: null,
       selectedSeason: null,
       restoreUid: null,
-      rendered: 0
+      rendered: 0,
+      sort: "date_desc",
+      minRating: 0,
+      filterOpen: false
     },
     overlay: {
       open: false,
@@ -139,6 +145,7 @@
       quality: "AUTO",
       fullscreen: false,
       ignoreBackUntil: 0,
+      controlsTimer: null,
       fullscreenDocumentListenerBound: false
     }
   };
@@ -826,9 +833,14 @@
         return;
       }
     }
-    if (stage <= 1 && !/images\.weserv\.nl/i.test(original)) {
+    if (stage === 1 && !/images\.weserv\.nl/i.test(original)) {
       el.setAttribute("data-logo-fallback-stage", "2");
       el.src = "https://images.weserv.nl/?url=" + encodeURIComponent(original);
+      return;
+    }
+    if (stage === 2 && !/wsrv\.nl/i.test(original)) {
+      el.setAttribute("data-logo-fallback-stage", "3");
+      el.src = "https://wsrv.nl/?url=" + encodeURIComponent(original);
       return;
     }
     el.style.display = "none";
@@ -842,6 +854,63 @@
       if (words[i]) text += words[i].charAt(0).toUpperCase();
     }
     return text || "CH";
+  }
+
+  function liveDisplayName(item) {
+    var value = trim(item && (item.name || item.title || item.tvg_name || item["tvg-name"] || ""));
+    var parts;
+    var channelNumber;
+    var aliases = [
+      [/^FOX\s+CRIC\b/i, "Fox Cricket"],
+      [/^SUPERSPORTS?\b/i, "SuperSport"],
+      [/^SKY\s+SPORTS?\s+CRIC\b/i, "Sky Sports Cricket"],
+      [/^ASTRO\s+CRICKET\b/i, "Astro Cricket"],
+      [/^WILLOW\s+SPORTS?\b/i, "Willow Sports"]
+    ];
+    var aliasIndex;
+
+    if (!value) {
+      return "Channel";
+    }
+    parts = value.split(/\s*\|\|\s*/);
+    if (parts.length > 1 && trim(parts[parts.length - 1])) {
+      value = trim(parts[parts.length - 1]);
+    }
+    value = value.replace(/^(?:\|\s*)?(?:[A-Z]{2,3}\s*:\s*)+/i, "");
+    value = value.replace(/^\|\s*/, "");
+    for (aliasIndex = 0; aliasIndex < aliases.length; aliasIndex += 1) {
+      if (aliases[aliasIndex][0].test(value)) {
+        value = value.replace(aliases[aliasIndex][0], aliases[aliasIndex][1]);
+        break;
+      }
+    }
+    value = value.replace(/\bCric\b/gi, "Cricket");
+    channelNumber = value.match(/(?:\s|^)(\d{2,4})(?:\s+(HD|FHD|4K))?\s*$/i);
+    if (channelNumber && !/channel\s*\d+\s*$/i.test(value)) {
+      value =
+        trim(value.slice(0, channelNumber.index)) +
+        " (Channel " +
+        channelNumber[1] +
+        ")" +
+        (channelNumber[2] ? " " + channelNumber[2].toUpperCase() : "");
+    }
+    return value;
+  }
+
+  function liveLogoUrl(item) {
+    if (!item) {
+      return "";
+    }
+    return (
+      item.stream_icon ||
+      item.tvg_logo ||
+      item["tvg-logo"] ||
+      item.logo ||
+      item.icon ||
+      item.channel_logo ||
+      item.cover ||
+      ""
+    );
   }
 
   function pad(num) {
@@ -2113,11 +2182,12 @@
   function buildM3uItem(extinf) {
     var group = readM3uAttr(extinf, "group-title") || "";
     var logo = readM3uAttr(extinf, "tvg-logo") || "";
+    var tvgName = readM3uAttr(extinf, "tvg-name") || "";
     var name = extinf.split(",");
     name = name.length ? trim(name[name.length - 1]) : "Channel";
     return {
-      name: name,
-      title: name,
+      name: tvgName || name,
+      title: tvgName || name,
       group: group,
       stream_icon: logo,
       stream_id: makeId(),
@@ -2267,9 +2337,16 @@
       sourceName: source.name,
       view: view,
       title: item.name || item.title || item.movie_title || options.title || "Untitled",
+      displayTitle:
+        view === "live"
+          ? liveDisplayName(item)
+          : item.name || item.title || item.movie_title || options.title || "Untitled",
       subtitle: options.subtitle || item.group || item.genre || "",
       categoryId: options.categoryId || item.category_id || item.group || "",
-      poster: item.stream_icon || item.cover || item.cover_big || item.movie_image || "",
+      poster:
+        view === "live"
+          ? liveLogoUrl(item)
+          : item.stream_icon || item.cover || item.cover_big || item.movie_image || "",
       streamId: item.stream_id || null,
       seriesId: item.series_id || null,
       episodeId: item.id || null,
@@ -3116,6 +3193,15 @@
         '<path d="M16 3h5v5"></path>' +
         '<path d="M21 16v5h-5"></path>' +
         '<path d="M3 16v5h5"></path>' +
+        "</svg>"
+      );
+    }
+    if (name === "filter") {
+      return (
+        '<svg class="' +
+        cls +
+        '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"></path>' +
         "</svg>"
       );
     }
@@ -4111,7 +4197,7 @@
             '" referrerpolicy="no-referrer" onerror="imgFallback(this)" />'
           : "") +
         '</div><div class="card-main"><div class="card-title">' +
-        escapeHtml(record.title) +
+        escapeHtml(record.displayTitle || record.title) +
         '<span class="live-favorite-marker" aria-label="Favorite"' +
         (isFavorite(record.uid) ? "" : ' style="display:none;"') +
         '>★</span>' +
@@ -4267,12 +4353,15 @@
       buildEpgHtml() +
       "</div></div>";
     document.getElementById("inline-ov-prev").addEventListener("click", function () {
+      showInlineFullscreenControls();
       changeInlineChannel(-1);
     });
     document.getElementById("inline-ov-next").addEventListener("click", function () {
+      showInlineFullscreenControls();
       changeInlineChannel(1);
     });
     document.getElementById("inline-ov-full").addEventListener("click", function () {
+      showInlineFullscreenControls();
       toggleInlineFullscreen();
     });
     var inlineFavorite = document.getElementById("inline-ov-fav");
@@ -4321,8 +4410,8 @@
     return html;
   }
 
-  function attachInlineLivePlayer() {
-    stopInlinePlayer();
+  function attachInlineLivePlayer(preserveFullscreen) {
+    stopInlinePlayer(preserveFullscreen === true);
     var sessionToken = state.inline.sessionToken;
     var video = document.getElementById("inline-video");
     var stateBox = document.getElementById("inline-state");
@@ -4336,6 +4425,8 @@
       state.inline.fullscreen = false;
       state.inline.ignoreBackUntil = Date.now() + 750;
       syncInlineFullscreenLayout();
+      hideInlineFullscreenControls();
+      renderLiveList();
       resetViewportScroll();
       restoreFocusToActiveLiveChannel();
     });
@@ -4356,6 +4447,8 @@
           state.inline.fullscreen = false;
           state.inline.ignoreBackUntil = Date.now() + 750;
           syncInlineFullscreenLayout();
+          hideInlineFullscreenControls();
+          renderLiveList();
           resetViewportScroll();
           restoreFocusToActiveLiveChannel();
         }
@@ -4681,12 +4774,12 @@
     startInlinePlayback();
   }
 
-  function stopInlinePlayer() {
+  function stopInlinePlayer(preserveFullscreen) {
     state.inline.sessionToken += 1;
     var videos = document.querySelectorAll("#inline-video, .inline-video-wrap video");
     Array.prototype.forEach.call(videos, function (video) {
       try {
-        if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
+        if (!preserveFullscreen && video.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
           video.webkitExitFullscreen();
         }
         video.pause();
@@ -4695,12 +4788,15 @@
         video.load();
       } catch (e) {}
     });
-    state.inline.fullscreen = false;
-    state.inline.ignoreBackUntil = Date.now() + 750;
-    document.body.classList.remove("inline-fullscreen-active");
-    Array.prototype.forEach.call(document.querySelectorAll(".inline-fullscreen"), function (node) {
-      node.classList.remove("inline-fullscreen");
-    });
+    if (!preserveFullscreen) {
+      state.inline.fullscreen = false;
+      state.inline.ignoreBackUntil = Date.now() + 750;
+      hideInlineFullscreenControls();
+      document.body.classList.remove("inline-fullscreen-active");
+      Array.prototype.forEach.call(document.querySelectorAll(".inline-fullscreen"), function (node) {
+        node.classList.remove("inline-fullscreen");
+      });
+    }
     if (state.inline.hls) {
       try {
         state.inline.hls.destroy();
@@ -4941,7 +5037,7 @@
     state.inline.index = nextIndex;
     pushHistory(nextRecord);
     if (state.inline.fullscreen) {
-      renderLiveList();
+      showInlineFullscreenControls();
       var fullscreenTitle = document.getElementById("inline-live-title");
       var fullscreenSubtitle = document.getElementById("inline-live-subtitle");
       if (fullscreenTitle) fullscreenTitle.textContent = nextRecord.title;
@@ -4949,13 +5045,248 @@
         fullscreenSubtitle.textContent =
           nextRecord.subtitle || recordCategoryName(nextRecord) || "Live channel";
       }
-      attachInlineLivePlayer();
+      attachInlineLivePlayer(true);
       loadLiveEpg(nextRecord);
       return;
     }
     renderLiveList();
     renderLiveDetail();
     loadLiveEpg(nextRecord);
+  }
+
+  function movieAddedTime(item) {
+    var fields = [item && item.added, item && item.date_added, item && item.dateAdded, item && item.created_at];
+    var i;
+    for (i = 0; i < fields.length; i += 1) {
+      if (fields[i]) {
+        var value = parseMaybeTime(fields[i]);
+        if (value) return value;
+      }
+    }
+    return 0;
+  }
+
+  function movieDisplayItems(items) {
+    var list = filtered(items || [], "movies");
+    var minRating = Number(state.movies.minRating) || 0;
+    if (minRating > 0) {
+      list = list.filter(function (item) {
+        return ratingValueFromItem(item) >= minRating;
+      });
+    }
+    list.sort(function (left, right) {
+      var leftName = String(left.name || left.title || "").toLowerCase();
+      var rightName = String(right.name || right.title || "").toLowerCase();
+      var leftRating = ratingValueFromItem(left);
+      var rightRating = ratingValueFromItem(right);
+      var leftDate = movieAddedTime(left);
+      var rightDate = movieAddedTime(right);
+      if (state.movies.sort === "date_asc" && leftDate !== rightDate) return leftDate - rightDate;
+      if (state.movies.sort === "date_desc" && leftDate !== rightDate) return rightDate - leftDate;
+      if (state.movies.sort === "rating_desc" && leftRating !== rightRating) return rightRating - leftRating;
+      if (state.movies.sort === "rating_asc" && leftRating !== rightRating) return leftRating - rightRating;
+      if (state.movies.sort === "name_desc") return rightName.localeCompare(leftName);
+      if (state.movies.sort === "name_asc") return leftName.localeCompare(rightName);
+      return 0;
+    });
+    return list;
+  }
+
+  function movieSortLabel() {
+    return {
+      date_desc: "Date Added (Latest First)",
+      date_asc: "Date Added (Oldest First)",
+      name_asc: "Name A-Z",
+      name_desc: "Name Z-A",
+      rating_desc: "Top rated",
+      rating_asc: "Lowest rated first"
+    }[state.movies.sort] || "Date Added (Latest First)";
+  }
+
+  function movieToolbarHtml(count) {
+    var ratingOptions = [0, 9, 8, 7, 6, 5];
+    var sortOptions = [
+      ["date_desc", "Date Added (Latest First)"],
+      ["date_asc", "Date Added (Oldest First)"],
+      ["name_asc", "Name A-Z"],
+      ["name_desc", "Name Z-A"],
+      ["rating_desc", "Top rated"],
+      ["rating_asc", "Lowest rated first"]
+    ];
+    var html = '<div class="movie-toolbar"><span class="section-count">' + count + ' items</span>';
+    html += '<span class="movie-sort-label">Sort: ' + escapeHtml(movieSortLabel()) + '</span>';
+    html += '<button id="movie-filter-button" class="btn focusable movie-filter-button" type="button" tabindex="0" title="Filter movies">' + mediaControlIconSvg("filter") + "Filter</button>";
+    html += '<div id="movie-filter-menu" class="movie-filter-menu' + (state.movies.filterOpen ? " open" : "") + '"><div class="movie-filter-heading">SORT BY</div>';
+    sortOptions.forEach(function (option) {
+      html += '<button class="movie-filter-option focusable' + (state.movies.sort === option[0] ? " active" : "") + '" type="button" tabindex="0" data-movie-sort="' + option[0] + '">' + (state.movies.sort === option[0] ? "✓ " : "") + escapeHtml(option[1]) + '</button>';
+    });
+    html += '<div class="movie-filter-heading movie-filter-heading-rating">MINIMUM RATING</div>';
+    ratingOptions.forEach(function (rating) {
+      html += '<button class="movie-filter-option focusable' + (Number(state.movies.minRating) === rating ? " active" : "") + '" type="button" tabindex="0" data-movie-rating="' + rating + '">' + (Number(state.movies.minRating) === rating ? "✓ " : "") + (rating ? rating.toFixed(1) + " and higher" : "Any rating") + '</button>';
+    });
+    html += '</div><button id="movie-refresh-list" class="btn focusable movie-refresh-button" type="button" tabindex="0" title="Refresh list">' + refreshIconSvg("icon-refresh-sm") + '</button></div>';
+    return html;
+  }
+
+  function bindMovieToolbar() {
+    var filterButton = document.getElementById("movie-filter-button");
+    if (filterButton) filterButton.addEventListener("click", function () {
+      state.movies.filterOpen = !state.movies.filterOpen;
+      renderMoviesFromState();
+      if (state.movies.filterOpen) focusMovieFilterOption("movie");
+      else focusNode(document.getElementById("movie-filter-button"));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-movie-sort]"), function (button) {
+      button.addEventListener("click", function () {
+        state.movies.sort = button.getAttribute("data-movie-sort");
+        state.movies.filterOpen = false;
+        renderMoviesFromState();
+        focusNode(document.getElementById("movie-filter-button"));
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-movie-rating]"), function (button) {
+      button.addEventListener("click", function () {
+        state.movies.minRating = parseFloat(button.getAttribute("data-movie-rating")) || 0;
+        state.movies.filterOpen = false;
+        renderMoviesFromState();
+        focusNode(document.getElementById("movie-filter-button"));
+      });
+    });
+  }
+
+  function seriesDisplayItems(items) {
+    var list = filtered(items || [], "series");
+    var minRating = Number(state.series.minRating) || 0;
+    if (minRating > 0) {
+      list = list.filter(function (item) {
+        return ratingValueFromItem(item) >= minRating;
+      });
+    }
+    list.sort(function (left, right) {
+      var leftName = String(left.name || left.title || "").toLowerCase();
+      var rightName = String(right.name || right.title || "").toLowerCase();
+      var leftRating = ratingValueFromItem(left);
+      var rightRating = ratingValueFromItem(right);
+      var leftDate = movieAddedTime(left);
+      var rightDate = movieAddedTime(right);
+      if (state.series.sort === "date_asc" && leftDate !== rightDate) return leftDate - rightDate;
+      if (state.series.sort === "date_desc" && leftDate !== rightDate) return rightDate - leftDate;
+      if (state.series.sort === "rating_desc" && leftRating !== rightRating) return rightRating - leftRating;
+      if (state.series.sort === "rating_asc" && leftRating !== rightRating) return leftRating - rightRating;
+      if (state.series.sort === "name_desc") return rightName.localeCompare(leftName);
+      if (state.series.sort === "name_asc") return leftName.localeCompare(rightName);
+      return 0;
+    });
+    return list;
+  }
+
+  function seriesSortLabel() {
+    return {
+      date_desc: "Date Added (Latest First)",
+      date_asc: "Date Added (Oldest First)",
+      name_asc: "Name A-Z",
+      name_desc: "Name Z-A",
+      rating_desc: "Top rated",
+      rating_asc: "Lowest rated first"
+    }[state.series.sort] || "Date Added (Latest First)";
+  }
+
+  function seriesToolbarHtml(count) {
+    var ratings = [0, 9, 8, 7, 6, 5];
+    var sorts = [
+      ["date_desc", "Date Added (Latest First)"],
+      ["date_asc", "Date Added (Oldest First)"],
+      ["name_asc", "Name A-Z"],
+      ["name_desc", "Name Z-A"],
+      ["rating_desc", "Top rated"],
+      ["rating_asc", "Lowest rated first"]
+    ];
+    var html = '<div class="movie-toolbar"><span class="section-count">' + count + ' items</span>';
+    html += '<span class="movie-sort-label">Sort: ' + escapeHtml(seriesSortLabel()) + '</span>';
+    html += '<button id="series-filter-button" class="btn focusable movie-filter-button" type="button" tabindex="0" title="Filter series">' + mediaControlIconSvg("filter") + "Filter</button>";
+    html += '<div id="series-filter-menu" class="movie-filter-menu' + (state.series.filterOpen ? " open" : "") + '"><div class="movie-filter-heading">SORT BY</div>';
+    sorts.forEach(function (option) {
+      html += '<button class="movie-filter-option focusable' + (state.series.sort === option[0] ? " active" : "") + '" type="button" tabindex="0" data-series-sort="' + option[0] + '">' + (state.series.sort === option[0] ? "✓ " : "") + escapeHtml(option[1]) + '</button>';
+    });
+    html += '<div class="movie-filter-heading movie-filter-heading-rating">MINIMUM RATING</div>';
+    ratings.forEach(function (rating) {
+      html += '<button class="movie-filter-option focusable' + (Number(state.series.minRating) === rating ? " active" : "") + '" type="button" tabindex="0" data-series-rating="' + rating + '">' + (Number(state.series.minRating) === rating ? "✓ " : "") + (rating ? rating.toFixed(1) + " and higher" : "Any rating") + '</button>';
+    });
+    return html + '</div><button id="series-refresh-list" class="btn focusable movie-refresh-button" type="button" tabindex="0" title="Refresh list">' + refreshIconSvg("icon-refresh-sm") + '</button></div>';
+  }
+
+  function bindSeriesToolbar() {
+    var toggle = function () {
+      state.series.filterOpen = !state.series.filterOpen;
+      renderSeriesFromState();
+      if (state.series.filterOpen) focusMovieFilterOption("series");
+      else focusNode(document.getElementById("series-filter-button"));
+    };
+    var filterButton = document.getElementById("series-filter-button");
+    if (filterButton) filterButton.addEventListener("click", toggle);
+    Array.prototype.forEach.call(document.querySelectorAll("[data-series-sort]"), function (button) {
+      button.addEventListener("click", function () {
+        state.series.sort = button.getAttribute("data-series-sort");
+        state.series.filterOpen = false;
+        renderSeriesFromState();
+        focusNode(document.getElementById("series-filter-button"));
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-series-rating]"), function (button) {
+      button.addEventListener("click", function () {
+        state.series.minRating = parseFloat(button.getAttribute("data-series-rating")) || 0;
+        state.series.filterOpen = false;
+        renderSeriesFromState();
+        focusNode(document.getElementById("series-filter-button"));
+      });
+    });
+  }
+
+  function focusMovieFilterOption(prefix) {
+    setTimeout(function () {
+      var option = document.querySelector(
+        prefix === "movie"
+          ? "#movie-filter-menu.open .movie-filter-option.active"
+          : "#series-filter-menu.open .movie-filter-option.active"
+      );
+      if (option) focusNode(option);
+    }, 0);
+  }
+
+  function handleMediaFilterKeys(code) {
+    var prefix = state.view === "movies" ? "movie" : state.view === "series" ? "series" : "";
+    var settings = prefix === "movie" ? state.movies : prefix === "series" ? state.series : null;
+    var menu;
+    var options;
+    var index;
+    if (!settings || !settings.filterOpen) return false;
+    menu = document.getElementById(prefix + "-filter-menu");
+    if (!menu) return false;
+    options = menu.querySelectorAll(".movie-filter-option");
+    if (code === 461 || code === 10009 || code === 27 || code === 8) {
+      settings.filterOpen = false;
+      if (prefix === "movie") renderMoviesFromState();
+      else renderSeriesFromState();
+      setTimeout(function () {
+        focusNode(document.getElementById(prefix + "-filter-button"));
+      }, 0);
+      return true;
+    }
+    if (code === 38 || code === 40) {
+      index = Array.prototype.indexOf.call(options, document.activeElement);
+      if (index < 0) index = 0;
+      else index += code === 38 ? -1 : 1;
+      index = Math.max(0, Math.min(options.length - 1, index));
+      focusNode(options[index]);
+      return true;
+    }
+    if (code === 13) {
+      if (document.activeElement && typeof document.activeElement.click === "function") {
+        document.activeElement.click();
+      }
+      return true;
+    }
+    return code === 37 || code === 39;
   }
 
   function buildGridCards(view, items, activeUid) {
@@ -4976,16 +5307,14 @@
     }
     var cache = activeSourceCache();
     var categories = (cache && cache.categories && cache.categories.movies) || [];
-    var filteredItems = filtered(state.movies.items || [], "movies");
+    var filteredItems = movieDisplayItems(state.movies.items || []);
     state.movies.rendered = Math.min(PAGE_GRID, filteredItems.length);
     pane.innerHTML =
       '<div class="section-toolbar"><div class="section-title">' +
       escapeHtml(currentCategoryName(categories, state.movies.selectedCategoryId)) +
-      '</div><div><span class="section-count">' +
-      filteredItems.length +
-      ' items</span><button id="movie-refresh-list" class="btn focusable" type="button" tabindex="0" title="Refresh list" style="margin-left:10px;">' +
-      refreshIconSvg("icon-refresh-sm") +
-      "</button></div></div>" +
+      "</div>" +
+      movieToolbarHtml(filteredItems.length) +
+      "</div>" +
       (filteredItems.length
         ? buildGridCards(
             "movies",
@@ -5001,6 +5330,7 @@
         renderMovies();
       });
     });
+    bindMovieToolbar();
     bindMovieGrid(filteredItems);
     queueRealtimeRatings(filteredItems.slice(0, state.movies.rendered));
     pane.onscroll = function () {
@@ -5021,16 +5351,14 @@
     }
     var cache = activeSourceCache();
     var categories = (cache && cache.categories && cache.categories.series) || [];
-    var filteredItems = filtered(state.series.items || [], "series");
+    var filteredItems = seriesDisplayItems(state.series.items || []);
     state.series.rendered = Math.min(PAGE_GRID, filteredItems.length);
     pane.innerHTML =
       '<div class="section-toolbar"><div class="section-title">' +
       escapeHtml(currentCategoryName(categories, state.series.selectedCategoryId)) +
-      '</div><div><span class="section-count">' +
-      filteredItems.length +
-      ' items</span><button id="series-refresh-list" class="btn focusable" type="button" tabindex="0" title="Refresh list" style="margin-left:10px;">' +
-      refreshIconSvg("icon-refresh-sm") +
-      "</button></div></div>" +
+      "</div>" +
+      seriesToolbarHtml(filteredItems.length) +
+      "</div>" +
       (filteredItems.length
         ? buildGridCards(
             "series",
@@ -5046,6 +5374,7 @@
         renderSeries();
       });
     });
+    bindSeriesToolbar();
     bindSeriesGrid(filteredItems);
     queueRealtimeRatings(filteredItems.slice(0, state.series.rendered));
     pane.onscroll = function () {
@@ -5087,6 +5416,7 @@
             while (sp && sp.scrollHeight <= sp.clientHeight) sp = sp.parentNode;
             state.movies._savedCatScroll = sp ? sp.scrollTop : 0;
             state.movies.selectedCategoryId = catId;
+            state.movies.filterOpen = false;
             syncSearchPlaceholder();
             state.movies.selectedUid = null;
             renderMovies();
@@ -5127,16 +5457,14 @@
           return;
         }
         state.movies.items = items;
-        var filteredItems = filtered(items, "movies");
+        var filteredItems = movieDisplayItems(items);
         state.movies.rendered = Math.min(PAGE_GRID, filteredItems.length);
         document.getElementById("movie-grid").innerHTML =
           '<div class="section-toolbar"><div class="section-title">' +
           escapeHtml(currentCategoryName(categories, state.movies.selectedCategoryId)) +
-          '</div><div><span class="section-count">' +
-          filteredItems.length +
-          ' items</span><button id="movie-refresh-list" class="btn focusable" type="button" tabindex="0" title="Refresh list" style="margin-left:10px;">' +
-          refreshIconSvg("icon-refresh-sm") +
-          "</button></div></div>" +
+          "</div>" +
+          movieToolbarHtml(filteredItems.length) +
+          "</div>" +
           (filteredItems.length
             ? buildGridCards(
                 "movies",
@@ -5157,6 +5485,7 @@
             renderMovies();
           });
         });
+        bindMovieToolbar();
         bindMovieGrid(filteredItems);
         queueRealtimeRatings(filteredItems.slice(0, state.movies.rendered));
         if (state.movies.selectedUid) {
@@ -5255,6 +5584,7 @@
             while (sp && sp.scrollHeight <= sp.clientHeight) sp = sp.parentNode;
             state.series._savedCatScroll = sp ? sp.scrollTop : 0;
             state.series.selectedCategoryId = catId;
+            state.series.filterOpen = false;
             syncSearchPlaceholder();
             state.series.selectedUid = null;
             renderSeries();
@@ -5295,7 +5625,7 @@
           return;
         }
         state.series.items = items;
-        var filteredItems = filtered(items, "series");
+        var filteredItems = seriesDisplayItems(items);
         var restoreIndex = state.series.restoreUid
           ? indexByUid(filteredItems, state.series.restoreUid, "series")
           : -1;
@@ -5309,11 +5639,9 @@
         document.getElementById("series-grid").innerHTML =
           '<div class="section-toolbar"><div class="section-title">' +
           escapeHtml(currentCategoryName(categories, state.series.selectedCategoryId)) +
-          '</div><div><span class="section-count">' +
-          filteredItems.length +
-          ' items</span><button id="series-refresh-list" class="btn focusable" type="button" tabindex="0" title="Refresh list" style="margin-left:10px;">' +
-          refreshIconSvg("icon-refresh-sm") +
-          "</button></div></div>" +
+          "</div>" +
+          seriesToolbarHtml(filteredItems.length) +
+          "</div>" +
           (filteredItems.length
             ? buildGridCards(
                 "series",
@@ -5334,6 +5662,7 @@
             renderSeries();
           });
         });
+        bindSeriesToolbar();
         bindSeriesGrid(filteredItems);
         queueRealtimeRatings(filteredItems.slice(0, state.series.rendered));
         if (state.series.restoreUid) {
@@ -8040,6 +8369,17 @@
     var wrap = document.querySelector(".inline-video-wrap");
     if (wrap) wrap.classList.add("inline-fullscreen");
     showInlineFullscreenTitle();
+    showInlineFullscreenControls();
+    if (wrap && wrap.requestFullscreen) {
+      try {
+        var request = wrap.requestFullscreen();
+        if (request && request.catch) request.catch(function () {});
+      } catch (e) {}
+    } else if (wrap && wrap.webkitRequestFullscreen) {
+      try {
+        wrap.webkitRequestFullscreen();
+      } catch (e2) {}
+    }
   }
 
   function showInlineFullscreenTitle() {
@@ -8054,13 +8394,63 @@
     if (quality) quality.textContent = state.inline.quality || "AUTO";
   }
 
+  function showInlineFullscreenControls() {
+    var controls = document.querySelector(".inline-overlay-controls");
+    var title = document.querySelector(".inline-live-title");
+    if ((!controls && !title) || !state.inline.fullscreen) {
+      return;
+    }
+    if (state.inline.controlsTimer) {
+      clearTimeout(state.inline.controlsTimer);
+    }
+    [controls, title].forEach(function (node) {
+      if (!node) return;
+      node.style.opacity = "1";
+      node.style.visibility = "visible";
+      node.style.pointerEvents = "auto";
+    });
+    state.inline.controlsTimer = setTimeout(function () {
+      [controls, title].forEach(function (node) {
+        if (!node) return;
+        node.style.opacity = "0";
+        node.style.visibility = "hidden";
+        node.style.pointerEvents = "none";
+      });
+      state.inline.controlsTimer = null;
+    }, 3500);
+  }
+
+  function hideInlineFullscreenControls() {
+    var controls = document.querySelector(".inline-overlay-controls");
+    var title = document.querySelector(".inline-live-title");
+    if (state.inline.controlsTimer) {
+      clearTimeout(state.inline.controlsTimer);
+      state.inline.controlsTimer = null;
+    }
+    [controls, title].forEach(function (node) {
+      if (node) {
+        node.style.opacity = "0";
+        node.style.visibility = "hidden";
+        node.style.pointerEvents = "none";
+      }
+    });
+  }
+
   function exitInlineFullscreen(video) {
     var doc = document;
     var wrap = document.querySelector(".inline-video-wrap");
-    var customFullscreen = !!(wrap && wrap.classList.contains("inline-fullscreen"));
+    var nativeFullscreen = !!(
+      video &&
+      (video.webkitDisplayingFullscreen ||
+        doc.fullscreenElement === video ||
+        doc.fullscreenElement === wrap ||
+        doc.webkitFullscreenElement === video ||
+        doc.webkitFullscreenElement === wrap)
+    );
     state.inline.fullscreen = false;
     state.inline.ignoreBackUntil = Date.now() + 500;
-    if (!customFullscreen) {
+    hideInlineFullscreenControls();
+    if (nativeFullscreen) {
       try {
         if (video.webkitExitFullscreen) {
           video.webkitExitFullscreen();
@@ -8076,6 +8466,7 @@
       } catch (e) {}
     }
     syncInlineFullscreenLayout();
+    renderLiveList();
     setTimeout(function () {
       restoreFocusToActiveLiveChannel();
     }, 100);
@@ -10230,10 +10621,12 @@
       return false;
     }
     if (code === 13) {
+      showInlineFullscreenControls();
       toggleInlineFullscreen();
       return true;
     }
     if (code === 37) {
+      showInlineFullscreenControls();
       target =
         document.querySelector(
           '#live-list [data-record-uid="' + (state.live.activeUid || "") + '"]'
@@ -10244,6 +10637,7 @@
       return true;
     }
     if (code === 39 || code === 38 || code === 40) {
+      showInlineFullscreenControls();
       target =
         document.getElementById("inline-ov-full") || document.getElementById("inline-ov-prev");
       if (target) {
@@ -10267,6 +10661,9 @@
       return true;
     }
     if (state.inline.record) {
+      if (state.inline.fullscreen) {
+        showInlineFullscreenControls();
+      }
       if (code === 33 || code === 427) {
         changeInlineChannel(-1);
       } else {
@@ -10396,6 +10793,8 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll(".rail-btn[data-view]"), function (btn) {
       btn.addEventListener("click", function () {
+        state.movies.filterOpen = false;
+        state.series.filterOpen = false;
         state.view = btn.getAttribute("data-view");
         renderCurrentView();
       });
@@ -10645,6 +11044,10 @@
         var activeTag = document.activeElement ? document.activeElement.tagName : "";
         var isInput = activeTag === "INPUT" || activeTag === "TEXTAREA";
         if (handleConfirmDialogKeys(code)) {
+          event.preventDefault();
+          return;
+        }
+        if (handleMediaFilterKeys(code)) {
           event.preventDefault();
           return;
         }
