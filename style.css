@@ -738,9 +738,10 @@ input:focus {
 .home-top-refresh {
   width: 100%;
   margin-top: 8px;
-  min-height: 40px;
+  min-height: 54px;
   font-size: 18px;
   font-weight: 700;
+  gap: 12px;
   display: -webkit-box;
   display: -webkit-flex;
   display: flex;
@@ -752,10 +753,38 @@ input:focus {
   align-items: center;
 }
 
-.home-top-refresh .icon-svg,
+.home-top-refresh .icon-svg {
+  width: 30px;
+  height: 30px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
 .section-toolbar .btn .icon-svg {
   width: 16px;
   height: 16px;
+}
+
+.home-top-sync-status {
+  min-height: 26px;
+  margin-top: 8px;
+  color: #9facbe;
+  font-size: 15px;
+  line-height: 26px;
+  text-align: center;
+}
+
+.home-top-sync-status-queued,
+.home-top-sync-status-running {
+  color: #9ec9ff;
+}
+
+.home-top-sync-status-completed {
+  color: #8fd6a1;
+}
+
+.home-top-sync-status-failed {
+  color: #ff9b9b;
 }
 
 .stat-card {
@@ -1672,15 +1701,15 @@ body.inline-fullscreen-active .live-detail-pane {
 
 /* Fill the available catalogue width without changing the collections pane. */
 .grid-pane .grid-wrap {
-  -webkit-box-pack: justify;
-  -webkit-justify-content: space-between;
-  justify-content: space-between;
+  -webkit-box-pack: start;
+  -webkit-justify-content: flex-start;
+  justify-content: flex-start;
 }
 
 .grid-pane .poster-card {
   width: 196px;
-  margin-right: 0;
-  margin-bottom: 0;
+  margin-right: 12px;
+  margin-bottom: 12px;
 }
 
 @supports (display: grid) {
@@ -1693,6 +1722,7 @@ body.inline-fullscreen-active .live-detail-pane {
   .grid-pane .poster-card {
     width: auto;
     min-width: 0;
+    margin: 0;
   }
 }
 
@@ -1918,7 +1948,8 @@ body.tvn-density-premium .grid-pane .grid-wrap {
 
 body.tvn-density-premium .grid-pane .poster-card {
   width: 250px;
-  margin-right: 0;
+  margin-right: 14px;
+  margin-bottom: 14px;
 }
 
 @supports (display: grid) {
@@ -1929,6 +1960,7 @@ body.tvn-density-premium .grid-pane .poster-card {
 
   body.tvn-density-premium .grid-pane .poster-card {
     width: auto;
+    margin: 0;
   }
 }
 
@@ -3355,6 +3387,11 @@ body.tvn-tv-scale .tab-btn,
 body.tvn-tv-scale .category-btn,
 body.tvn-tv-scale .segment-btn {
   font-size: 23px;
+}
+
+body.tvn-tv-scale .home-top-sync-status {
+  font-size: 19px;
+  line-height: 30px;
 }
 
 body.tvn-tv-scale .category-pane {
