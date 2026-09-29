@@ -1478,7 +1478,43 @@
     return view.charAt(0).toUpperCase() + view.slice(1);
   }
 
+  function ensureHomeRefreshQueueState() {
+    if (!state.homeSummary || typeof state.homeSummary !== "object") {
+      state.homeSummary = {};
+    }
+    if (!state.homeSummary.counts || typeof state.homeSummary.counts !== "object") {
+      state.homeSummary.counts = {};
+    }
+    if (!state.homeSummary.updatedAt || typeof state.homeSummary.updatedAt !== "object") {
+      state.homeSummary.updatedAt = {};
+    }
+    if (!Array.isArray(state.homeSummary.queue)) {
+      state.homeSummary.queue = [];
+    }
+    if (!state.homeSummary.viewStatus || typeof state.homeSummary.viewStatus !== "object") {
+      state.homeSummary.viewStatus = {};
+    }
+    ["live", "movies", "series"].forEach(function (view) {
+      if (typeof state.homeSummary.counts[view] !== "number") {
+        state.homeSummary.counts[view] = 0;
+      }
+      if (typeof state.homeSummary.updatedAt[view] !== "number") {
+        state.homeSummary.updatedAt[view] = 0;
+      }
+      if (!state.homeSummary.viewStatus[view]) {
+        state.homeSummary.viewStatus[view] = "idle";
+      }
+    });
+    if (typeof state.homeSummary.activeView !== "string") {
+      state.homeSummary.activeView = "";
+    }
+    if (typeof state.homeSummary.loading !== "boolean") {
+      state.homeSummary.loading = false;
+    }
+  }
+
   function homeRefreshStatusText(view) {
+    ensureHomeRefreshQueueState();
     var status = state.homeSummary.viewStatus[view];
     if (status === "running") return "Updating now";
     if (status === "completed") return "Completed";
@@ -1491,6 +1527,7 @@
   }
 
   function updateHomeRefreshProgressLabel() {
+    ensureHomeRefreshQueueState();
     var activeView = state.homeSummary.activeView;
     var countText;
     var counts;
@@ -1508,6 +1545,7 @@
   }
 
   function updateHomeRefreshStatusUI() {
+    ensureHomeRefreshQueueState();
     ["live", "movies", "series"].forEach(function (view) {
       var statusNode = document.querySelector('[data-home-sync-status="' + view + '"]');
       var button = document.querySelector('[data-home-refresh="' + view + '"]');
@@ -1818,6 +1856,9 @@
         movies: 0,
         series: 0
       },
+      queue: [],
+      activeView: "",
+      viewStatus: { live: "idle", movies: "idle", series: "idle" },
       loading: false,
       sourceId: "",
       recentLoading: false,
@@ -1971,11 +2012,6 @@
       var xhr = new XMLHttpRequest();
       xhr.open("GET", url, true);
       xhr.timeout = 30000;
-      if (userAgent) {
-        try {
-          xhr.setRequestHeader("User-Agent", userAgent);
-        } catch (e) {}
-      }
       xhr.onreadystatechange = function () {
         if (xhr.readyState !== 4) {
           return;
@@ -2010,6 +2046,9 @@
       xhr.timeout = 15000;
       var k;
       for (k in headers || {}) {
+        if (String(k).toLowerCase() === "user-agent") {
+          continue;
+        }
         try {
           xhr.setRequestHeader(k, headers[k]);
         } catch (e) {}
@@ -2437,14 +2476,25 @@
   }
 
   function moviePlaybackCandidates(record, url) {
-    var candidates = [url];
+    var candidates = [];
     var source = activeSource();
     var ext = String(record && record.ext || "").toLowerCase();
+    var mediaType = record && record.view === "episode" ? "series" : "movies";
+    var streamId = record && record.view === "episode" ? record.episodeId : record && record.streamId;
+
+    function push(candidate) {
+      candidate = trim(candidate);
+      if (candidate && candidates.indexOf(candidate) === -1) {
+        candidates.push(candidate);
+      }
+    }
+
+    push(url);
     if (
       source &&
       source.type === "xtream" &&
       record &&
-      record.streamId &&
+      streamId &&
       ext &&
       ext !== "mp4" &&
       ext !== "webm" &&
@@ -2452,7 +2502,11 @@
       ext !== "m3u8" &&
       ext !== "ts"
     ) {
-      candidates.push(xtreamStreamUrl(source, "movies", record.streamId, "mp4"));
+      push(xtreamStreamUrl(source, mediaType, streamId, "mp4"));
+    }
+    if (source && source.type === "xtream" && streamId) {
+      push(xtreamStreamUrl(source, mediaType, streamId, "m3u8"));
+      push(xtreamStreamUrl(source, mediaType, streamId, "ts"));
     }
     return candidates;
   }
@@ -3609,6 +3663,7 @@
   }
 
   function refreshHomeSection(view) {
+    ensureHomeRefreshQueueState();
     var queue = state.homeSummary.queue;
     var queuedIndex;
     if (!activeSource() || ["live", "movies", "series"].indexOf(view) === -1) {
@@ -3994,7 +4049,7 @@
     updateHomeClockDisplay();
     bindRecordButtons(dom.workspace);
     queueRealtimeRatings(recentList.concat(continueList, recentAddedList));
-    focusFirst(".poster-card");
+    focusFirst(".home-top-open");
   }
 
   // scrollIntoView({block:"nearest"}) requires Chrome 60+; webOS 3.x ignores options
@@ -4480,7 +4535,7 @@
     }
     var record = state.inline.record;
     detail.innerHTML =
-      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" class="focusable" tabindex="0" autoplay playsinline webkit-playsinline></video><div class="inline-live-title"><strong id="inline-live-title"></strong><span id="inline-live-subtitle"></span><em id="inline-live-quality">AUTO</em></div><div id="inline-state" class="inline-video-empty"><div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
+      '<div class="player-panel"><div class="inline-video-wrap"><video id="inline-video" tabindex="-1" autoplay playsinline webkit-playsinline></video><div class="inline-live-title"><strong id="inline-live-title"></strong><span id="inline-live-subtitle"></span><em id="inline-live-quality">AUTO</em></div><div id="inline-state" class="inline-video-empty"><div class="loading-orbit"><i></i></div><p>Loading stream</p><span class="loading-caption">Connecting to channel</span></div><div class="inline-overlay-controls"><button id="inline-ov-prev" class="btn icon-only focusable" type="button" tabindex="0" title="Previous channel">' +
       mediaControlIconSvg("prev") +
       '</button><button id="inline-ov-full" class="btn primary icon-only focusable" type="button" tabindex="0" title="Fullscreen">' +
       mediaControlIconSvg("fullscreen") +
@@ -4565,8 +4620,7 @@
       state.inline.ignoreBackUntil = Date.now() + 750;
       syncInlineFullscreenLayout();
       hideInlineFullscreenControls();
-      renderLiveList();
-      resetViewportScroll();
+      syncActiveLiveCard();
       restoreFocusToActiveLiveChannel();
     });
     function handleInlineVideoBack(event) {
@@ -4583,12 +4637,14 @@
       state.inline.fullscreenDocumentListenerBound = true;
       document.addEventListener("fullscreenchange", function () {
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (!state.inline.fullscreen) {
+            return;
+          }
           state.inline.fullscreen = false;
           state.inline.ignoreBackUntil = Date.now() + 750;
           syncInlineFullscreenLayout();
           hideInlineFullscreenControls();
-          renderLiveList();
-          resetViewportScroll();
+          syncActiveLiveCard();
           restoreFocusToActiveLiveChannel();
         }
       });
@@ -8607,10 +8663,20 @@
       } catch (e) {}
     }
     syncInlineFullscreenLayout();
-    renderLiveList();
-    setTimeout(function () {
-      restoreFocusToActiveLiveChannel();
-    }, 100);
+    syncActiveLiveCard();
+    restoreFocusToActiveLiveChannel();
+  }
+
+  function syncActiveLiveCard() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#live-list [data-record-uid]"),
+      function (card) {
+        card.classList.toggle(
+          "active",
+          card.getAttribute("data-record-uid") === state.live.activeUid
+        );
+      }
+    );
   }
 
   function syncInlineFullscreenLayout() {
@@ -8625,7 +8691,12 @@
   function attachOverlayPlayer(url, record) {
     stopOverlayPlayerEngine();
     var video = dom.overlayVideo;
-    var candidates = record && record.view === "live" ? livePlaybackCandidates(record) : record && record.view === "movies" ? moviePlaybackCandidates(record, url) : [url];
+    var candidates =
+          record && record.view === "live"
+            ? livePlaybackCandidates(record)
+            : record && (record.view === "movies" || record.view === "episode")
+              ? moviePlaybackCandidates(record, url)
+              : [url];
     var candidateIndex = 0;
     var reconnecting = false;
     var failCount = 0;
@@ -8663,7 +8734,9 @@
       reconnecting = true;
       clearOverlayRecovery();
       var switchedCandidate =
-        state.overlay.record.view === "live" || state.overlay.record.view === "movies"
+        state.overlay.record.view === "live" ||
+        state.overlay.record.view === "movies" ||
+        state.overlay.record.view === "episode"
           ? nextCandidate()
           : false;
       if (switchedCandidate) {
@@ -8727,6 +8800,10 @@
       video.volume = state.settings.volume;
       video.setAttribute("preload", "auto");
       dom.overlayStatus.innerHTML = '<div class="loading-orbit"><i></i></div><span>Loading stream</span><small class="loading-caption">Preparing playback</small>';
+      video.onerror = function () {
+        console.warn("[overlay] Stream request failed; advancing playback fallback.", candidateIndex + 1);
+        scheduleOverlayReconnect("error");
+      };
 
       if (isHlsUrl(currentUrl) && canUseNativeHls(video)) {
         video.src = currentUrl;
@@ -8844,9 +8921,6 @@
           dom.overlayStatus.textContent = "";
         }
       };
-      video.onerror = function () {
-        scheduleOverlayReconnect("error");
-      };
     }
 
     startOverlayPlayback();
@@ -8935,11 +9009,13 @@
     function tryRestore() {
       attempts += 1;
       var node = target();
-      if (node && document.activeElement !== node) {
-        focusNode(node);
-        scrollIntoViewNearest(node, document.getElementById("live-list"));
+      if (node) {
+        if (document.activeElement !== node) {
+          focusNode(node);
+          scrollIntoViewNearest(node, document.getElementById("live-list"));
+        }
       }
-      if (attempts < 12) {
+      if (attempts < 12 && node && document.activeElement !== node) {
         setTimeout(tryRestore, 100);
       }
     }
@@ -9642,8 +9718,25 @@
       if (node) {
         safeFocus(node);
         scrollNodeIntoHost(node);
+        keepHomeAtTopForTopControls(node);
       }
     }, 50);
+  }
+
+  function keepHomeAtTopForTopControls(node) {
+    var homeWrap;
+    if (
+      state.view !== "home" ||
+      !node ||
+      !node.closest ||
+      !(node.closest("#topbar") || node.closest(".home-top-shell") || node.closest(".source-menu"))
+    ) {
+      return;
+    }
+    homeWrap = document.querySelector(".home-wrap");
+    if (homeWrap) {
+      homeWrap.scrollTop = 0;
+    }
   }
 
   function getFocusable() {
@@ -10195,12 +10288,7 @@
         }
       }
       if (direction === "right") {
-        target =
-          layout.querySelector("#live-detail .focusable") || layout.querySelector("#inline-video");
-        if (target) {
-          focusNode(target);
-          return true;
-        }
+        return true;
       }
     }
 
@@ -10315,6 +10403,7 @@
       }
       safeFocus(node);
       scrollNodeIntoHost(node);
+      keepHomeAtTopForTopControls(node);
       if (state.view === "settings") {
         setTimeout(function () {
           if (document.activeElement === node) {
@@ -10763,7 +10852,8 @@
     }
     if (code === 13) {
       showInlineFullscreenControls();
-      toggleInlineFullscreen();
+      target = document.getElementById("inline-ov-prev");
+      if (target) focusNode(target);
       return true;
     }
     if (code === 37) {

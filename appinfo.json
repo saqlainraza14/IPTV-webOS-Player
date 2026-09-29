@@ -1,6 +1,6 @@
 {
   "id": "com.tvnavigator.webos",
-  "version": "1.0.67",
+  "version": "1.0.69",
   "vendor": "SaqlainRaza",
   "type": "web",
   "main": "index.html",

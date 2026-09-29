@@ -3394,6 +3394,105 @@ body.tvn-tv-scale .home-top-sync-status {
   line-height: 30px;
 }
 
+body.tvn-tv-scale .toast {
+  top: 32px;
+  right: 32px;
+  min-width: 440px;
+  max-width: 700px;
+  padding: 24px 30px;
+  font-size: 30px;
+  line-height: 1.3;
+}
+
+body.tvn-tv-scale .toast-icon {
+  margin-right: 18px;
+  font-size: 38px;
+}
+
+body.tvn-tv-scale .overlay-status {
+  max-width: 80vw;
+  white-space: normal;
+  font-size: 44px;
+  line-height: 1.25;
+}
+
+body.tvn-tv-scale .overlay-status > span {
+  font-size: 32px;
+  line-height: 1.3;
+}
+
+body.tvn-tv-scale .overlay-status .loading-caption,
+body.tvn-tv-scale .loading-caption {
+  font-size: 23px;
+  line-height: 1.35;
+}
+
+body.tvn-tv-scale .loading-orbit {
+  width: 82px;
+  height: 82px;
+  margin-bottom: 22px;
+  border-width: 6px;
+}
+
+body.tvn-tv-scale .loading-orbit:after {
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  border-width: 3px;
+}
+
+body.tvn-tv-scale .loading-orbit i {
+  top: -9px;
+  left: 34px;
+  width: 14px;
+  height: 14px;
+}
+
+body.tvn-tv-scale .loading-state p,
+body.tvn-tv-scale .movie-detail-loading-content p {
+  font-size: 36px;
+  line-height: 1.3;
+}
+
+body.tvn-tv-scale .movie-detail-loading-content h1 {
+  font-size: 54px;
+  line-height: 1.2;
+}
+
+body.tvn-tv-scale .movie-detail-loading-content .loading-caption {
+  font-size: 24px;
+}
+
+body.tvn-tv-scale #overlay-subtitle,
+body.tvn-tv-scale .inline-live-title span {
+  font-size: 26px;
+  line-height: 1.35;
+}
+
+body.tvn-tv-scale .inline-live-title em {
+  font-size: 21px;
+}
+
+body.tvn-tv-scale .overlay-caption-inner {
+  font-size: 42px;
+  line-height: 1.5;
+}
+
+body.tvn-tv-scale .inline-video-empty p {
+  font-size: 38px;
+  line-height: 1.25;
+}
+
+body.tvn-tv-scale .sync-progress-top {
+  font-size: 27px;
+  line-height: 1.3;
+}
+
+body.tvn-tv-scale .sync-progress-track {
+  height: 16px;
+}
+
 body.tvn-tv-scale .category-pane {
   width: 460px;
 }
@@ -3475,6 +3574,30 @@ body.tvn-tv-scale .movie-detail-cast h2 {
 
 body.tvn-tv-scale .movie-cast-person {
   font-size: 19px;
+}
+
+body.tvn-tv-scale .grid-pane .grid-wrap {
+  -webkit-box-pack: start;
+  -webkit-justify-content: flex-start;
+  justify-content: flex-start;
+}
+
+body.tvn-tv-scale .grid-pane .poster-card {
+  width: 18%;
+  margin-right: 2%;
+  margin-bottom: 14px;
+}
+
+@supports (display: grid) {
+  body.tvn-tv-scale .grid-pane .grid-wrap {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  body.tvn-tv-scale .grid-pane .poster-card {
+    width: auto;
+    margin: 0;
+  }
 }
 
 body.tvn-theme-light .home-top-shell,
