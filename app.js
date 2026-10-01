@@ -66,6 +66,7 @@
     homeSearch: {
       token: 0,
       loading: false,
+      progressActive: false,
       lastQuery: "",
       focused: false,
       results: []
@@ -1474,6 +1475,19 @@
     }, 650);
   }
 
+  function hideSyncProgressNow() {
+    if (syncProgressHideTimer) {
+      clearTimeout(syncProgressHideTimer);
+      syncProgressHideTimer = null;
+    }
+    if (dom.syncProgress) {
+      dom.syncProgress.className = "sync-progress hidden";
+    }
+    if (dom.workspace) {
+      dom.workspace.classList.remove("sync-progress-visible");
+    }
+  }
+
   function homeRefreshViewLabel(view) {
     return view.charAt(0).toUpperCase() + view.slice(1);
   }
@@ -2656,13 +2670,34 @@
       return list.slice();
     }
     return list.filter(function (item) {
-      var hay = (
+      return normalizedSearchText(item).catalog.indexOf(query) !== -1;
+    });
+  }
+
+  var normalizedSearchTextCache = typeof WeakMap === "function" ? new WeakMap() : null;
+
+  function normalizedSearchText(item) {
+    var cached;
+    if (normalizedSearchTextCache && item && typeof item === "object") {
+      cached = normalizedSearchTextCache.get(item);
+      if (cached) return cached;
+    }
+    item = item || {};
+    cached = {
+      catalog: (
         (item.name || item.title || item.movie_title || "") +
         " " +
         (item.group || item.plot || item.description || "")
-      ).toLowerCase();
-      return hay.indexOf(query) !== -1;
-    });
+      ).toLowerCase(),
+      homeName: String(item.name || item.title || item.movie_title || "").toLowerCase(),
+      homeSecondary: String(
+        item.group || item.genre || item.plot || item.description || item.category_name || ""
+      ).toLowerCase()
+    };
+    if (normalizedSearchTextCache && item && typeof item === "object") {
+      normalizedSearchTextCache.set(item, cached);
+    }
+    return cached;
   }
 
   function itemDedupeKey(item, fallback) {
@@ -2873,11 +2908,7 @@
       renderedView = state.view;
       if (state.view !== "home") {
         homeWorkToken += 1;
-        state.homeSearch.token += 1;
-        state.homeSearch.loading = false;
-        state.homeSearch.results = [];
-        state.homeSearch.lastQuery = "";
-        state.homeSearch.focused = false;
+        stopHomeSearch();
         state.homeSummary.recentLoading = false;
         if (state.activeSourceId) {
           homeCountSyncState[state.activeSourceId] = "";
@@ -4629,6 +4660,13 @@
         exitInlineFullscreen(video);
         event.preventDefault();
         event.stopPropagation();
+        return;
+      }
+      if (
+        isInlineNativeFullscreen(video) &&
+        (code === 13 || code === 37 || code === 38 || code === 39 || code === 40)
+      ) {
+        showInlineFullscreenControls();
       }
     }
     video.addEventListener("keydown", handleInlineVideoBack, true);
@@ -6840,12 +6878,7 @@
     if (!trim(state.searchQuery)) {
       return;
     }
-    // Invalidate every pending scan/fetch callback before changing the view.
-    state.homeSearch.token += 1;
-    state.homeSearch.loading = false;
-    state.homeSearch.results = [];
-    state.homeSearch.lastQuery = "";
-    state.homeSearch.focused = false;
+    stopHomeSearch();
     state.searchQuery = "";
     if (dom.search) {
       dom.search.value = "";
@@ -9227,6 +9260,74 @@
     }
   }
 
+  function updateHomeSearchResults(results, done) {
+    var title = dom.workspace.querySelector(".shelf-head .section-title");
+    var count = dom.workspace.querySelector(".shelf-head .section-count");
+    var status = dom.workspace.querySelector(".shelf .status-box");
+    var grid = dom.workspace.querySelector(".shelf .grid-wrap");
+    var shownCount = Math.min((results || []).length, HOME_SEARCH_RENDER_LIMIT);
+    var existingCount;
+    var batch;
+    var html = "";
+    var index;
+
+    if (title) title.textContent = "Search results" + (done ? "" : " (searching...)");
+    if (count) count.textContent = String((results || []).length);
+    if (!shownCount) {
+      if (done && status) {
+        status.querySelector("p").textContent = "No matches found.";
+      }
+      return;
+    }
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.className = "grid-wrap";
+      if (status && status.parentNode) {
+        status.parentNode.insertBefore(grid, status);
+        status.parentNode.removeChild(status);
+      } else {
+        var shelf = dom.workspace.querySelector(".shelf");
+        if (shelf) shelf.appendChild(grid);
+      }
+    }
+    existingCount = grid.querySelectorAll("[data-record-uid]").length;
+    if (existingCount < shownCount) {
+      for (index = existingCount; index < shownCount; index += 1) {
+        html += posterCard(results[index]);
+      }
+      batch = document.createElement("div");
+      batch.innerHTML = html;
+      bindRecordButtons(batch);
+      while (batch.firstChild) {
+        grid.appendChild(batch.firstChild);
+      }
+      if (!state.homeSearch.focused) {
+        state.homeSearch.focused = true;
+        focusFirst(".poster-card");
+      }
+    }
+    if (done) {
+      queueRealtimeRatings(results.slice(0, HOME_SEARCH_RENDER_LIMIT));
+    }
+  }
+
+  function stopHomeSearch() {
+    var hadSearchProgress = state.homeSearch.progressActive;
+    state.homeSearch.token += 1;
+    state.homeSearch.loading = false;
+    state.homeSearch.progressActive = false;
+    state.homeSearch.results = [];
+    state.homeSearch.lastQuery = "";
+    state.homeSearch.focused = false;
+    if (
+      hadSearchProgress &&
+      dom.syncProgressLabel &&
+      dom.syncProgressLabel.textContent === "Searching source"
+    ) {
+      hideSyncProgressNow();
+    }
+  }
+
   function triggerHomeSearch() {
     var query = trim(state.searchQuery).toLowerCase();
     if (query && query === state.homeSearch.lastQuery && !state.homeSearch.loading) {
@@ -9235,8 +9336,7 @@
     }
     state.homeSearch.lastQuery = query;
     if (!query) {
-      state.homeSearch.loading = false;
-      state.homeSearch.results = [];
+      stopHomeSearch();
       renderHome();
       return;
     }
@@ -9252,7 +9352,7 @@
       }
       state.homeSearch.results = results;
       state.homeSearch.loading = !done;
-      renderHome();
+      updateHomeSearchResults(results, done);
     }).then(
       function () {},
       function () {
@@ -9260,7 +9360,7 @@
           return;
         }
         state.homeSearch.loading = false;
-        renderHome();
+        updateHomeSearchResults(state.homeSearch.results, true);
       }
     );
   }
@@ -9314,13 +9414,13 @@
   function pushSearchMatch(task, item, query, dedupe, allRecords) {
     // Test the title on its own first: it matches most queries and avoids allocating
     // the concatenated haystack for the vast majority of non-matching rows.
-    var name = item.name || item.title || item.movie_title || "";
-    if (query && name.toLowerCase().indexOf(query) === -1) {
-      var secondary =
-        item.group || item.genre || item.plot || item.description || item.category_name || "";
-      if (!secondary || secondary.toLowerCase().indexOf(query) === -1) {
-        return;
-      }
+    var searchText = normalizedSearchText(item);
+    if (
+      query &&
+      searchText.homeName.indexOf(query) === -1 &&
+      searchText.homeSecondary.indexOf(query) === -1
+    ) {
+      return;
     }
     var record = buildRecord(task.view, item, {
       subtitle:
@@ -9351,13 +9451,9 @@
     var lastEmitCount = 0;
     return new Promise(function (resolve) {
       function emit(force) {
-        if (!onChunk || allRecords.length === lastEmitCount) {
-          return;
-        }
+        if (!onChunk || allRecords.length === lastEmitCount) return;
         var now = Date.now();
-        if (!force && now - lastEmit < 200) {
-          return;
-        }
+        if (!force && now - lastEmit < 200) return;
         lastEmit = now;
         lastEmitCount = allRecords.length;
         onChunk();
@@ -9396,17 +9492,28 @@
     });
   }
 
-  function scanTaskItemsChunked(task, items, query, dedupe, allRecords, maxResults, token) {
+  function scanTaskItemsChunked(task, items, query, dedupe, allRecords, maxResults, token, onChunk) {
     var list = items || [];
     var chunkSize = 220;
     var idx = 0;
+    var lastEmit = 0;
+    var lastEmitCount = allRecords.length;
     return new Promise(function (resolve) {
+      function emit(force) {
+        if (!onChunk || allRecords.length === lastEmitCount) return;
+        var now = Date.now();
+        if (!force && now - lastEmit < 200) return;
+        lastEmit = now;
+        lastEmitCount = allRecords.length;
+        onChunk();
+      }
       function step() {
         if (token !== state.homeSearch.token) {
           resolve(true);
           return;
         }
         if (allRecords.length >= maxResults || idx >= list.length) {
+          emit(true);
           resolve(allRecords.length >= maxResults);
           return;
         }
@@ -9415,9 +9522,11 @@
         var done = pushSearchMatches(task, partial, query, dedupe, allRecords, maxResults);
         idx = end;
         if (done) {
+          emit(true);
           resolve(true);
           return;
         }
+        emit(false);
         setTimeout(step, 0);
       }
       step();
@@ -9484,6 +9593,7 @@
 
         var total = fetchTasks.length;
         var done = 0;
+        state.homeSearch.progressActive = true;
         startSyncProgress("Searching source", total);
         return runWithConcurrency(fetchTasks, 4, function (task) {
           if (token !== state.homeSearch.token || allRecords.length >= maxResults) {
@@ -9500,17 +9610,27 @@
               dedupe,
               allRecords,
               maxResults,
-              token
+              token,
+              function () {
+                if (onPartial && token === state.homeSearch.token) {
+                  onPartial(allRecords.slice(0, maxResults), false);
+                }
+              }
             ).then(function () {
               done += 1;
-              updateSyncProgress(done, total);
-              if (onPartial && token === state.homeSearch.token) {
-                onPartial(allRecords.slice(0, maxResults), false);
+              if (token === state.homeSearch.token) {
+                updateSyncProgress(done, total);
+                if (onPartial) {
+                  onPartial(allRecords.slice(0, maxResults), false);
+                }
               }
             });
           });
         }).then(function () {
-          finishSyncProgress("Search ready");
+          if (token === state.homeSearch.token) {
+            state.homeSearch.progressActive = false;
+            finishSyncProgress("Search ready");
+          }
           if (onPartial && token === state.homeSearch.token) {
             onPartial(allRecords.slice(0, maxResults), true);
           }
@@ -11263,6 +11383,12 @@
       var code = normalizedRemoteCode(event);
       if (!code) {
         return;
+      }
+      if (
+        state.inline.fullscreen &&
+        (code === 13 || code === 37 || code === 38 || code === 39 || code === 40)
+      ) {
+        showInlineFullscreenControls();
       }
       // Do NOT use event.defaultPrevented — webOS spatial navigation sets it
       // for every arrow key, which would block all remote navigation.

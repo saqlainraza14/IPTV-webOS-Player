@@ -1738,6 +1738,8 @@ body.inline-fullscreen-active .live-detail-pane {
   overflow: hidden;
   -webkit-flex-shrink: 0;
   flex-shrink: 0;
+  -webkit-transition: -webkit-transform 120ms ease-out;
+  transition: transform 120ms ease-out;
 }
 
 .poster-card .poster {
@@ -1830,8 +1832,8 @@ body.inline-fullscreen-active .live-detail-pane {
   display: block;
   -webkit-object-fit: contain;
   object-fit: contain;
-  -webkit-object-position: center top;
-  object-position: center top;
+  -webkit-object-position: center center;
+  object-position: center center;
 }
 
 .poster-card--title-overlay .poster {
@@ -4666,6 +4668,11 @@ body.tvn-theme-light input:focus {
   border-color: #fff2a8 !important;
   -webkit-box-shadow: 0 0 0 8px rgba(255, 190, 44, 0.78) !important;
   box-shadow: 0 0 0 8px rgba(255, 190, 44, 0.78) !important;
+}
+
+.poster-card:focus {
+  -webkit-transform: scale(1.04);
+  transform: scale(1.04);
 }
 
 body.tvn-theme-aurora .poster-card:focus,
