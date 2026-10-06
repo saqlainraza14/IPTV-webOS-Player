@@ -4675,6 +4675,16 @@ body.tvn-theme-light input:focus {
   transform: scale(1.04);
 }
 
+body.tvn-tv-scale .poster-card {
+  -webkit-transition: none;
+  transition: none;
+}
+
+body.tvn-tv-scale .poster-card:focus {
+  -webkit-transform: none;
+  transform: none;
+}
+
 body.tvn-theme-aurora .poster-card:focus,
 body.tvn-theme-aurora .content-card:focus {
   outline-color: #ffffff;

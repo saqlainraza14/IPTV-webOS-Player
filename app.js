@@ -4673,19 +4673,21 @@
     video.addEventListener("keyup", handleInlineVideoBack, true);
     if (!state.inline.fullscreenDocumentListenerBound) {
       state.inline.fullscreenDocumentListenerBound = true;
-      document.addEventListener("fullscreenchange", function () {
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (!state.inline.fullscreen) {
-            return;
-          }
+      var handleInlineFullscreenChange = function () {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          return;
+        }
+        if (state.inline.fullscreen) {
           state.inline.fullscreen = false;
           state.inline.ignoreBackUntil = Date.now() + 750;
-          syncInlineFullscreenLayout();
           hideInlineFullscreenControls();
           syncActiveLiveCard();
           restoreFocusToActiveLiveChannel();
         }
-      });
+        syncInlineFullscreenLayout();
+      };
+      document.addEventListener("fullscreenchange", handleInlineFullscreenChange);
+      document.addEventListener("webkitfullscreenchange", handleInlineFullscreenChange);
     }
     var candidates = livePlaybackCandidates(state.inline.record);
     var candidateIndex = 0;
@@ -8669,6 +8671,7 @@
   function exitInlineFullscreen(video) {
     var doc = document;
     var wrap = document.querySelector(".inline-video-wrap");
+    var documentFullscreenElement = doc.fullscreenElement || doc.webkitFullscreenElement;
     var nativeFullscreen = !!(
       video &&
       (video.webkitDisplayingFullscreen ||
@@ -8682,9 +8685,17 @@
     hideInlineFullscreenControls();
     if (nativeFullscreen) {
       try {
-        if (video.webkitExitFullscreen) {
+        if (documentFullscreenElement && (doc.exitFullscreen || doc.webkitExitFullscreen || doc.webkitCancelFullScreen)) {
+          if (doc.exitFullscreen) {
+            doc.exitFullscreen();
+          } else if (doc.webkitExitFullscreen) {
+            doc.webkitExitFullscreen();
+          } else {
+            doc.webkitCancelFullScreen();
+          }
+        } else if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
           video.webkitExitFullscreen();
-        } else if (video.webkitExitFullScreen) {
+        } else if (video.webkitDisplayingFullscreen && video.webkitExitFullScreen) {
           video.webkitExitFullScreen();
         } else if (doc.exitFullscreen) {
           doc.exitFullscreen();
@@ -8719,6 +8730,15 @@
       return;
     }
     wrap.classList.remove("inline-fullscreen");
+    var video = wrap.querySelector("video");
+    if (video) {
+      try {
+        video.style.width = "99.9%";
+        void video.offsetHeight;
+        video.style.width = "100%";
+        void video.offsetHeight;
+      } catch (e) {}
+    }
   }
 
   function attachOverlayPlayer(url, record) {
