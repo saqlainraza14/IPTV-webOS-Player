@@ -17,6 +17,13 @@
     } catch (e) {}
   }
 
+  function hideStartupLoader() {
+    var loader = document.getElementById("startup-loader");
+    if (loader) {
+      loader.className += " startup-loader-hidden";
+    }
+  }
+
   diag("app.js start");
 
   var KEY_SOURCES = "tvn_sources";
@@ -11718,6 +11725,20 @@
     renderCurrentView();
     hud("init:8 focus");
     focusFirst(".rail-btn.active");
+    if (activeSource()) {
+      var startupSourceId = state.activeSourceId;
+      ensureSourceCacheHydrated().then(function () {
+        if (state.activeSourceId === startupSourceId) {
+          hydrateHomeSummaryFromCache();
+          if (state.view === "home" && !trim(state.searchQuery)) {
+            renderHome();
+          }
+        }
+        hideStartupLoader();
+      });
+    } else {
+      hideStartupLoader();
+    }
   }
 
   try {

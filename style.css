@@ -50,6 +50,131 @@ input:focus {
   display: none !important;
 }
 
+#startup-loader {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9998;
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(48, 92, 148, 0.22), transparent 34%),
+    linear-gradient(180deg, #141923 0%, #0f131a 100%);
+  opacity: 1;
+  visibility: visible;
+  -webkit-transition: opacity 240ms ease, visibility 240ms ease;
+  transition: opacity 240ms ease, visibility 240ms ease;
+}
+
+#startup-loader.startup-loader-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.startup-loader-card {
+  width: 100%;
+  max-width: 100%;
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  text-align: center;
+}
+
+.startup-loader-card .loading-orbit {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.startup-loader-logo {
+  width: 240px;
+  height: 240px;
+  margin-bottom: 30px;
+  object-fit: contain;
+}
+
+.startup-loader-card p {
+  margin: 0;
+  color: #f6f9ff;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.startup-loader-card span {
+  margin-top: 10px;
+  color: #9fb0c5;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+@media screen and (min-width: 1600px) and (min-height: 900px) {
+  .startup-loader-logo {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+@media screen and (max-width: 600px), screen and (max-height: 600px) {
+  .startup-loader-logo {
+    width: 180px;
+    height: 180px;
+    margin-bottom: 20px;
+  }
+
+  .startup-loader-card p {
+    font-size: 24px;
+  }
+}
+
+@media screen and (max-width: 380px), screen and (max-height: 380px) {
+  .startup-loader-logo {
+    width: 110px;
+    height: 110px;
+    margin-bottom: 12px;
+  }
+
+  .startup-loader-card .loading-orbit {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 12px;
+  }
+
+  .startup-loader-card .loading-orbit:after {
+    top: 9px;
+    right: 9px;
+    bottom: 9px;
+    left: 9px;
+  }
+
+  .startup-loader-card .loading-orbit i {
+    left: 17px;
+  }
+
+  .startup-loader-card p {
+    font-size: 20px;
+  }
+
+  .startup-loader-card span {
+    margin-top: 6px;
+    font-size: 15px;
+  }
+}
+
 #app-shell {
   width: 100%;
   height: 100%;
